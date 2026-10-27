@@ -35,9 +35,27 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 export const WRITE_TIMEOUT_MS = 2000;
 
+/** Where one write's time went, in ms: the trace a slow batch logs (server.ts). */
+export interface WriteTiming {
+  /** Waiting behind this workspace's previous transaction (group commit). */
+  queued: number;
+  connect: number;
+  setup: number;
+  insert: number;
+  commit: number;
+  /** Events in the transaction this request's events went out in. */
+  rows: number;
+}
+
+export interface WriteResult {
+  inserted: number;
+  timing: WriteTiming;
+}
+
 interface Waiter {
   rows: Row[];
-  resolve: (r: { inserted: number }) => void;
+  queuedAt: number;
+  resolve: (r: WriteResult) => void;
   reject: (e: unknown) => void;
 }
 
@@ -57,14 +75,14 @@ export class BatchWriter {
   ) {}
 
   /** Resolves with how many of `rows` were new (the rest were retries). */
-  write(tenantId: string, rows: Row[]): Promise<{ inserted: number }> {
+  write(tenantId: string, rows: Row[]): Promise<WriteResult> {
     return new Promise((resolve, reject) => {
       let lane = this.lanes.get(tenantId);
       if (lane === undefined) {
         lane = { waiting: [], running: null };
         this.lanes.set(tenantId, lane);
       }
-      lane.waiting.push({ rows, resolve, reject });
+      lane.waiting.push({ rows, queuedAt: performance.now(), resolve, reject });
       if (lane.running === null) this.start(tenantId, lane);
     });
   }
@@ -100,7 +118,11 @@ export class BatchWriter {
 
   private async flush(tenantId: string, waiters: Waiter[]): Promise<void> {
     const rows = waiters.flatMap((w) => w.rows);
+    const t0 = performance.now();
     const client = await this.pool.connect();
+    const t1 = performance.now();
+    let t2 = t1;
+    let t3 = t1;
     let insertedIds: Set<string>;
     try {
       // BEGIN, both timeouts and the tenant context in ONE round trip (the
@@ -115,6 +137,7 @@ export class BatchWriter {
           `SET LOCAL idle_in_transaction_session_timeout = ${String(WRITE_TIMEOUT_MS)}; ` +
           `SELECT set_config('app.tenant_id', '${tenantId}', true)`,
       );
+      t2 = performance.now();
       // ON CONFLICT only when a row can conflict: one with a client-sent id (a
       // retried batch). Server-generated ids are fresh v4 UUIDs, and the
       // speculative insertion ON CONFLICT needs measured at twice the cost of a
@@ -136,6 +159,7 @@ export class BatchWriter {
           rows.map((r) => JSON.stringify(r.properties)),
         ],
       );
+      t3 = performance.now();
       await client.query('COMMIT');
       insertedIds = new Set(result.rows.map((r) => r.id));
     } catch (error) {
@@ -148,10 +172,21 @@ export class BatchWriter {
     // Each stored id is claimed by exactly one waiter: two requests in one flush
     // carrying the same event id stored one row, and only one of them may report
     // it as new, or the duplicate's quota would never be refunded.
+    const t4 = performance.now();
     for (const w of waiters) {
       let inserted = 0;
       for (const r of w.rows) if (insertedIds.delete(r.id)) inserted += 1;
-      w.resolve({ inserted });
+      w.resolve({
+        inserted,
+        timing: {
+          queued: t0 - w.queuedAt,
+          connect: t1 - t0,
+          setup: t2 - t1,
+          insert: t3 - t2,
+          commit: t4 - t3,
+          rows: rows.length,
+        },
+      });
     }
   }
 }

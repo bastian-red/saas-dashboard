@@ -287,6 +287,34 @@ if (!(beside.p99 <= allowed))
   fail(`quiet p99 beside the flood ${beside.p99.toFixed(2)} ms exceeds ${allowed.toFixed(2)} ms`);
 
 await pool.end();
+
+// Where the tail lives: ingest logs one line per accepted batch slower than
+// 200 ms with every phase timed. Count them by their dominant phase, so a
+// failed run says "commit" or "queued" instead of only a number.
+{
+  const { existsSync, readFileSync } = await import('node:fs');
+  const log = join(OUT, 'ingest.log');
+  const slow = existsSync(log)
+    ? readFileSync(log, 'utf8')
+        .split('\n')
+        .filter((l) => l.includes('"event":"slow_batch"'))
+        .map((l) => JSON.parse(l))
+    : [];
+  const byPhase = {};
+  for (const b of slow) {
+    const [phase] = Object.entries(b.phases).sort((x, y) => y[1] - x[1])[0];
+    byPhase[phase] = (byPhase[phase] ?? 0) + 1;
+  }
+  report.slowBatches = {
+    count: slow.length,
+    dominantPhase: byPhase,
+    worst: slow.sort((x, y) => y.ms - x.ms).slice(0, 5),
+  };
+  console.log(`loadtest: batches over 200 ms: ${String(slow.length)} ${JSON.stringify(byPhase)}`);
+  for (const b of report.slowBatches.worst)
+    console.log(`  ${JSON.stringify({ ms: b.ms, phases: b.phases, txRows: b.txRows })}`);
+}
+
 // Leave nothing behind: deleting a workspace through the API deletes its
 // events and rollups too, so repeated runs reuse the same disk instead of
 // growing the database (Docker's disk is small on the machine this runs on).

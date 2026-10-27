@@ -13,7 +13,10 @@ import {
 import { type AdmissionControl } from './admission';
 import { type KeyDirectory } from './directory';
 import { hashKey, normalise, readKey, type Row } from './normalise';
-import { type BatchWriter } from './writer';
+import type { BatchWriter, WriteTiming } from './writer';
+
+/** An accepted batch slower than this end to end logs its phases (one JSON line). */
+export const SLOW_BATCH_MS = 200;
 
 /**
  * The HTTP surface: POST /v1/events and GET /health.
@@ -47,6 +50,7 @@ export function buildServer(deps: Deps): FastifyInstance {
   const app = Fastify({ bodyLimit: 1_048_576, logger: false });
 
   app.post('/v1/events', async (request, reply) => {
+    const started = performance.now();
     const key = readKey(
       request.headers.authorization,
       request.headers['x-api-key'] as string | undefined,
@@ -71,7 +75,9 @@ export function buildServer(deps: Deps): FastifyInstance {
         );
     }
 
+    const lookupStarted = performance.now();
     const owner = await deps.directory.lookup(hashKey(key));
+    const lookupMs = performance.now() - lookupStarted;
     if (owner === null)
       return reply
         .code(401)
@@ -92,7 +98,9 @@ export function buildServer(deps: Deps): FastifyInstance {
         }),
       );
 
+    const admitStarted = performance.now();
     const admission = await deps.admission.admit(owner.tenantId, owner.plan, rows.length, at);
+    const admitMs = performance.now() - admitStarted;
     if (admission.outcome === 'rate') {
       return reply
         .code(429)
@@ -118,8 +126,9 @@ export function buildServer(deps: Deps): FastifyInstance {
     }
 
     let inserted: number;
+    let timing: WriteTiming;
     try {
-      ({ inserted } = await deps.writer.write(owner.tenantId, rows));
+      ({ inserted, timing } = await deps.writer.write(owner.tenantId, rows));
     } catch (error) {
       // Charged but not stored: give the quota back, answer 503 so the client retries.
       await deps.admission.refund(owner.tenantId, rows.length, at).catch(() => undefined);
@@ -140,6 +149,30 @@ export function buildServer(deps: Deps): FastifyInstance {
         owner.plan.monthlyEvents - (admission.usedAfter - duplicates),
       ),
     };
+    const totalMs = performance.now() - started;
+    if (totalMs > SLOW_BATCH_MS) {
+      // One structured line per slow accepted batch, every phase timed, so a
+      // latency tail says where it lives (a CI runner's p99 was 280 ms at idle).
+      const round = (n: number) => Math.round(n * 10) / 10;
+      process.stdout.write(
+        `${JSON.stringify({
+          service: 'ingest',
+          event: 'slow_batch',
+          ms: round(totalMs),
+          events: rows.length,
+          phases: {
+            lookup: round(lookupMs),
+            admit: round(admitMs),
+            queued: round(timing.queued),
+            connect: round(timing.connect),
+            setup: round(timing.setup),
+            insert: round(timing.insert),
+            commit: round(timing.commit),
+          },
+          txRows: timing.rows,
+        })}\n`,
+      );
+    }
     return reply.code(202).send(body);
   });
 
