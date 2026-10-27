@@ -1,0 +1,164 @@
+// saas-dashboard schema.
+//
+// Multi-tenant by row-level security. Three things about this file are
+// load-bearing and are explained where they appear:
+//
+//   1. Every model with a `tenantId` is tenant data. The `tenant_isolation`
+//      migration enables AND FORCES row-level security on each of them, and
+//      `src/tenancy.test.ts` plus the catalog gate in the integration lane fail
+//      if a table with a tenant_id column is ever added without a policy.
+//   2. The services connect as `saas_app`, which owns no table and cannot bypass
+//      RLS. Migrations run as the owner. A query that forgets `WHERE tenant_id`
+//      therefore returns the current tenant's rows or none, never another's.
+//   3. Raw events, their rollups and the HyperLogLog sketches live in raw SQL
+//      (partitioning and bytea maths Prisma cannot express); see the
+//      `events_and_rollups` migration.
+//
+// `prisma migrate dev` is `--create-only` in package.json, so a generated
+// migration is reviewed before it can drop a hand-written policy.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  // The app role. Every service and every request goes through this one.
+  url       = env("DATABASE_URL")
+  // The owner role, for migrations only.
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+/// Global: a person can belong to several workspaces. No tenant_id, no RLS;
+/// listed in GLOBAL_TABLES in src/tenancy.ts.
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique(map: "users_email_key")
+  name         String
+  passwordHash String       @map("password_hash")
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  memberships  Membership[]
+
+  @@map("users")
+}
+
+/// The workspace itself. Its row is visible only inside its own tenant context.
+model Tenant {
+  id                     String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug                   String    @unique(map: "tenants_slug_key")
+  name                   String
+  /// The plan the subscription is FOR; what is enforced is effectivePlan(plan, subscriptionStatus).
+  plan                   String    @default("free")
+  subscriptionStatus     String?   @map("subscription_status")
+  providerCustomerId     String?   @unique(map: "tenants_provider_customer_key") @map("provider_customer_id")
+  providerSubscriptionId String?   @map("provider_subscription_id")
+  currentPeriodEnd       DateTime? @map("current_period_end") @db.Timestamptz(3)
+  /// The last provider event applied, so an older delivery cannot overwrite a newer state.
+  subscriptionUpdatedAt  DateTime? @map("subscription_updated_at") @db.Timestamptz(3)
+  /// The admin's accent and the steps derived from it for both schemes; null = product default.
+  branding               Json?
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  memberships Membership[]
+  invites     Invite[]
+  apiKeys     ApiKey[]
+  dashboards  Dashboard[]
+
+  @@map("tenants")
+}
+
+model Membership {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@id([tenantId, userId], map: "memberships_pkey")
+  @@index([userId], map: "memberships_user_idx")
+  @@map("memberships")
+}
+
+model Invite {
+  id         String    @id @default(cuid())
+  tenantId   String    @map("tenant_id") @db.Uuid
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email      String
+  role       String
+  /// SHA-256 of the token in the link. The raw token exists only in that link.
+  tokenHash  String    @unique(map: "invites_token_hash_key") @map("token_hash")
+  invitedBy  String    @map("invited_by")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("invites")
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  tenantId   String    @map("tenant_id") @db.Uuid
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name       String
+  /// The first 12 characters (`sk_saas_ab12`), shown in lists.
+  prefix     String
+  /// SHA-256 of the whole key. A key is high-entropy, so a plain hash is enough
+  /// and a lookup by hash stays an index probe; a slow password hash would make
+  /// every ingest request pay for it.
+  keyHash    String    @unique(map: "api_keys_hash_key") @map("key_hash")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  @@map("api_keys")
+}
+
+model Dashboard {
+  id        String   @id @default(cuid())
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  range     String   @default("7d")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lanes     Lane[]
+
+  /// The target of the lanes' composite foreign key (see Lane).
+  @@unique([id, tenantId], map: "dashboards_id_tenant_key")
+  @@index([tenantId, updatedAt(sort: Desc)], map: "dashboards_tenant_updated_idx")
+  @@map("dashboards")
+}
+
+model Lane {
+  id          String    @id @default(cuid())
+  tenantId    String    @map("tenant_id") @db.Uuid
+  dashboardId String    @map("dashboard_id")
+  /// Composite: a lane's tenant must equal its dashboard's tenant. A lane can
+  /// never be attached to another workspace's dashboard, whatever the API does.
+  dashboard   Dashboard @relation(fields: [dashboardId, tenantId], references: [id, tenantId], onDelete: Cascade, map: "lanes_dashboard_tenant_fkey")
+  title       String?
+  position    Int
+  height      Int       @default(20)
+  spec        Json
+
+  // (dashboard_id, position) is unique, DEFERRABLE, in the tenant_isolation
+  // migration: a reorder rewrites every position in one transaction, and a
+  // non-deferrable unique would refuse the intermediate state.
+  @@index([dashboardId], map: "lanes_dashboard_idx")
+  @@map("lanes")
+}
+
+/// Global: provider webhook deliveries already applied. Keyed by the provider's
+/// event id, before any tenant is known, so it cannot carry RLS; listed in
+/// GLOBAL_TABLES.
+model WebhookEvent {
+  provider   String
+  eventId    String   @map("event_id")
+  type       String
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+
+  @@id([provider, eventId], map: "webhook_events_pkey")
+  @@map("webhook_events")
+}

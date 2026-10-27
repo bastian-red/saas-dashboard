@@ -1,0 +1,37 @@
+{
+  "name": "@saas/aggregator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Watermarked, incremental hourly rollups per workspace (counts, breakdowns, sums, HyperLogLog sketches of users), each tenant processed inside its own RLS context.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@saas/query-engine": "workspace:*",
+    "@saas/shared": "workspace:*",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@saas/config": "workspace:*",
+    "@saas/ingest": "workspace:*",
+    "@types/node": "^20.17.6",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

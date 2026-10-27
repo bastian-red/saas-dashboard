@@ -1,0 +1,9 @@
+{
+  "extends": "@saas/config/tsconfig.node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["prisma/seed.mts"]
+}

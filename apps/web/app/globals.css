@@ -1,0 +1,1313 @@
+/*
+ * saas-dashboard: "the trace viewer".
+ *
+ * A product team reads this at the start of the day to answer one question:
+ * is the product healthy? So the page is built like an instrument's trace
+ * view, not a wall of cards: every lane runs the full width on ONE shared time
+ * axis, and one crosshair reads every lane at the same instant. Mint lab paper
+ * and plum ink by day; forest-black and lavender by night.
+ *
+ * Every colour below is gated:
+ *   lib/identity.test.ts    pins canvas, accent, radius and faces
+ *   lib/contrast.test.ts    every pair this sheet paints, WCAG AA, both schemes
+ *   lib/tokens.test.ts      no var() resolves to nothing
+ *   lib/branding.test.ts    the tenant's accent reaches only the allowed marks,
+ *                           and services/branding judges it on these surfaces
+ *
+ * Depth is borders-only: hairlines between lanes, no shadows, because a trace
+ * view is read edge to edge and a shadow would make one lane look more
+ * important than its neighbour.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Paper: the canvas, the lane surface, the inset panels. services/branding
+     judges every tenant accent against exactly these three (branding.test.ts). */
+  --bg: #e1f7f2;
+  --surface: #f8fefc;
+  --surface-2: #cdeee6;
+
+  /* Ink */
+  --text: #0c2621;
+  --muted: #3b5c53;
+
+  /* The product's own accent: plum. */
+  --accent: #5a4590;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2e4ed;
+
+  /* Control edges must clear 3:1; hairlines are structure and need not. */
+  --border: #658880;
+  --hairline: rgba(12, 38, 33, 0.12);
+  --hairline-strong: rgba(12, 38, 33, 0.24);
+
+  /* State. Always with a glyph and a word (contrast.test.ts measures why). */
+  --ok: #1d6b35;
+  --warn: #7a5300;
+  --danger: #a3283a;
+  --danger-soft: #f6e6e7;
+
+  /* Chart series, validated with the dataviz validator in this order. Fixed
+     order, never cycled; a fourth key folds into Other. */
+  --series-1: #6a50a7;
+  --series-2: #c0612b;
+  --series-3: #1f7fb8;
+  --series-other: #6f807a;
+  --crosshair: #0c2621;
+
+  /* The tenant's accent. A workspace with branding sets the --tenant-* names
+     inline on the shell (app/w/[slug]/layout.tsx); without it every --brand
+     falls back to the product's plum. --brand is worn ONLY by the lane rail,
+     primary buttons, the focus ring and the current-page marker. */
+  --brand: var(--tenant-accent-light, var(--accent));
+  --brand-ink: var(--tenant-ink-light, var(--accent-ink));
+  --brand-soft: var(--tenant-soft-light, var(--accent-soft));
+
+  --radius: 5px;
+  --radius-small: 3px;
+  --rail-width: 15.5rem;
+  --readout-width: 9.5rem;
+  --label-width: 17rem;
+
+  --font-heading: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-ui), ui-sans-serif, system-ui, sans-serif;
+  --font-code: var(--font-mono), ui-monospace, monospace;
+}
+
+/* The same three, re-declared on the element that carries the tenant's inline
+   --tenant-* values (the workspace shell). A custom property resolves its
+   var() where it is DECLARED and inherits the result, so --brand computed on
+   :root (where no tenant value exists) would reach every descendant as the
+   product plum, branding or not. lib/branding.test.ts pins this block. */
+[data-branded] {
+  --brand: var(--tenant-accent-light, var(--accent));
+  --brand-ink: var(--tenant-ink-light, var(--accent-ink));
+  --brand-soft: var(--tenant-soft-light, var(--accent-soft));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --bg: #021409;
+    --surface: #071f16;
+    --surface-2: #0e2c21;
+
+    --text: #e4f6ef;
+    --muted: #a6c7bc;
+
+    --accent: #b9a6ee;
+    --accent-ink: #0c2621;
+    --accent-soft: #203234;
+
+    --border: #5d8277;
+    --hairline: rgba(228, 246, 239, 0.12);
+    --hairline-strong: rgba(228, 246, 239, 0.26);
+
+    --ok: #6fd08f;
+    --warn: #e9b84f;
+    --danger: #ff8f9b;
+    --danger-soft: #3a1a1f;
+
+    --series-1: #8c76d0;
+    --series-2: #c96c36;
+    --series-3: #3a8fc6;
+    --series-other: #71857e;
+    --crosshair: #e4f6ef;
+
+    --brand: var(--tenant-accent-dark, var(--accent));
+    --brand-ink: var(--tenant-ink-dark, var(--accent-ink));
+    --brand-soft: var(--tenant-soft-dark, var(--accent-soft));
+  }
+
+  [data-branded] {
+    --brand: var(--tenant-accent-dark, var(--accent));
+    --brand-ink: var(--tenant-ink-dark, var(--accent-ink));
+    --brand-soft: var(--tenant-soft-dark, var(--accent-soft));
+  }
+}
+
+/* --- base -------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+h1 {
+  font-size: 1.5rem;
+}
+
+h2 {
+  font-size: 1.125rem;
+}
+
+h3 {
+  font-size: 1rem;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.18em;
+}
+
+code,
+kbd {
+  font-family: var(--font-code);
+  font-size: 0.85em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -3rem;
+  z-index: 10;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.skip-link:focus {
+  top: 0.75rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.mono {
+  font-family: var(--font-code);
+  font-size: 0.85em;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- controls ------------------------------------------------------------------ */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.button:hover {
+  background: var(--surface-2);
+}
+
+.button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.button-primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+}
+
+.button-primary:hover {
+  background: var(--brand);
+  filter: brightness(1.08);
+}
+
+.button-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  min-height: 2rem;
+  padding: 0 0.5rem;
+}
+
+.button-quiet:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.button-danger {
+  color: var(--danger);
+}
+
+.button-small {
+  min-height: 1.875rem;
+  padding: 0 0.6rem;
+  font-size: 0.875rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.field-label {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.field-input,
+.field-select {
+  min-height: 2.25rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.field-input[type='color'] {
+  padding: 0.2rem;
+  width: 3rem;
+}
+
+.form-error {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.form-ok {
+  display: flex;
+  gap: 0.45rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: flex-end;
+}
+
+/* --- auth pages ------------------------------------------------------------------ */
+
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem 1rem;
+}
+
+.auth-card {
+  width: min(26rem, 100%);
+  display: grid;
+  gap: 1.1rem;
+  padding: 1.75rem;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+}
+
+.auth-title {
+  font-size: 1.375rem;
+}
+
+.auth-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.auth-demo,
+.auth-switch {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.auth-demo code {
+  color: var(--text);
+}
+
+/* The wordmark: three lanes and a crosshair through them. */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 1.4rem;
+  height: 1.4rem;
+  color: var(--accent);
+}
+
+/* --- the shell: rail + work area -------------------------------------------------- */
+
+.shell {
+  display: grid;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.rail {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1rem 0.85rem;
+  border-right: 1px solid var(--hairline-strong);
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.switcher {
+  position: relative;
+}
+
+.switcher summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.switcher summary::-webkit-details-marker {
+  display: none;
+}
+
+.switcher-name {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.switcher-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcher-name span {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.switcher-caret {
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.switcher-menu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.35rem;
+  margin: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+}
+
+.switcher-menu a {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius-small);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.switcher-menu a:hover {
+  background: var(--surface-2);
+}
+
+.switcher-menu .role {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+/* The workspace's monogram: its accent, on its own colour. */
+.ws-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: var(--radius-small);
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+.nav {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.nav-heading {
+  margin: 0.6rem 0 0.25rem;
+  padding: 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.38rem 0.5rem;
+  border-left: 3px solid transparent;
+  border-radius: 0 var(--radius-small) var(--radius-small) 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.nav-link:hover {
+  background: var(--surface-2);
+}
+
+.nav-link[aria-current='page'] {
+  border-left-color: var(--brand);
+  background: var(--brand-soft);
+  font-weight: 600;
+}
+
+.rail-foot {
+  margin-top: auto;
+  display: grid;
+  gap: 0.4rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--hairline);
+  font-size: 0.875rem;
+}
+
+.work {
+  min-width: 0;
+  padding: 1.5rem clamp(1rem, 3vw, 2.25rem) 3rem;
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.page-head-text {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.crumb {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.section {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 2rem;
+}
+
+.panel {
+  padding: 1.1rem 1.2rem;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+}
+
+/* --- tables (members, keys, the lane table view) ------------------------------------ */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.table th,
+.table td {
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.table td.num,
+.table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+/* --- dashboards index ------------------------------------------------------------- */
+
+.dash-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--hairline-strong);
+}
+
+.dash-list li {
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.dash-list a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.25rem 1rem;
+  padding: 0.85rem 0.25rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.dash-list a:hover .dash-name {
+  text-decoration: underline;
+}
+
+.dash-name {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+/* A miniature of the dashboard's lanes: one tick per lane. */
+.dash-lanes {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+.dash-lanes span {
+  width: 1.5rem;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--hairline-strong);
+}
+
+/* --- the trace: lanes on one axis --------------------------------------------------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.segmented button {
+  padding: 0.25rem 0.7rem;
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.segmented button:hover {
+  background: var(--surface-2);
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.trace {
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.trace-row {
+  display: grid;
+  grid-template-columns: var(--label-width) minmax(0, 1fr) var(--readout-width);
+}
+
+.axis {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--surface);
+  border-bottom: 1px solid var(--hairline-strong);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.axis-label {
+  padding: 0.5rem 0.85rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.axis-track {
+  position: relative;
+  height: 2.25rem;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.axis-tick {
+  position: absolute;
+  top: 0.55rem;
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.axis-tick:first-child {
+  transform: none;
+}
+
+.axis-cursor {
+  position: absolute;
+  top: 0.3rem;
+  transform: translateX(-50%);
+  padding: 0.1rem 0.45rem;
+  border-radius: var(--radius-small);
+  background: var(--text);
+  color: var(--surface);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.axis-readout-head {
+  padding: 0.5rem 0.85rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  text-align: right;
+}
+
+.lane {
+  position: relative;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.lane:last-child {
+  border-bottom: 0;
+}
+
+/* The lane rail: the tenant's mark down the left edge of every lane. */
+.lane::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.6rem;
+  bottom: 0.6rem;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: var(--brand);
+}
+
+.lane-label {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  padding: 0.7rem 0.85rem 0.7rem 1.1rem;
+  min-width: 0;
+}
+
+.lane-title {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.lane-sentence {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.lane-sentence .token {
+  font-family: var(--font-code);
+  font-size: 0.78rem;
+  color: var(--text);
+  padding: 0 0.25rem;
+  border-bottom: 1px dotted var(--border);
+}
+
+.lane-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  margin-top: 0.1rem;
+}
+
+.lane-tools form {
+  display: contents;
+}
+
+.lane-plot {
+  position: relative;
+  min-width: 0;
+  touch-action: none;
+  cursor: crosshair;
+  border-left: 1px solid var(--hairline);
+  border-right: 1px solid var(--hairline);
+}
+
+.plot-surface {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The crosshair's end-marker: 12px whatever the lane's width (dataviz: >= 8px
+   mark with a 2px surface ring). Its own SVG, so the plot's stretched x
+   cannot squash it into an ellipse. */
+.plot-marker {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.plot-grid {
+  stroke: var(--hairline);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.plot-top {
+  position: absolute;
+  top: 0.15rem;
+  left: 0.35rem;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.plot-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.plot-area {
+  stroke: none;
+  opacity: 0.1;
+}
+
+.plot-crosshair {
+  stroke: var(--crosshair);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.plot-dot {
+  stroke: var(--surface);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.series-1 {
+  stroke: var(--series-1);
+  fill: var(--series-1);
+}
+
+.series-2 {
+  stroke: var(--series-2);
+  fill: var(--series-2);
+}
+
+.series-3 {
+  stroke: var(--series-3);
+  fill: var(--series-3);
+}
+
+.series-other {
+  stroke: var(--series-other);
+  fill: var(--series-other);
+}
+
+.plot-line.series-1,
+.plot-line.series-2,
+.plot-line.series-3,
+.plot-line.series-other {
+  fill: none;
+}
+
+/* A number lane: the hero value, and its sparkline in the plot. */
+.lane-figure {
+  position: absolute;
+  inset: 0.5rem auto auto 0.85rem;
+  display: grid;
+  gap: 0.1rem;
+  pointer-events: none;
+}
+
+.lane-figure strong {
+  font-family: var(--font-heading);
+  font-size: 2.1rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.lane-figure span {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.lane-readout {
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.8125rem;
+}
+
+.readout-row {
+  display: grid;
+  grid-template-columns: 0.9rem minmax(0, 1fr) auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.readout-key {
+  width: 0.9rem;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.readout-key.series-1 {
+  background: var(--series-1);
+}
+
+.readout-key.series-2 {
+  background: var(--series-2);
+}
+
+.readout-key.series-3 {
+  background: var(--series-3);
+}
+
+.readout-key.series-other {
+  background: var(--series-other);
+}
+
+.readout-name {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.readout-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.readout-note {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* The breakdown-table lane. */
+.lane-table {
+  padding: 0.35rem 0.75rem;
+  overflow-x: auto;
+}
+
+.lane-table .table td,
+.lane-table .table th {
+  padding: 0.3rem 0.5rem;
+}
+
+.share-bar {
+  display: inline-block;
+  height: 6px;
+  min-width: 2px;
+  border-radius: 0 2px 2px 0;
+  vertical-align: middle;
+}
+
+/* The table alternative under every lane. */
+.lane-data {
+  grid-column: 1 / -1;
+  padding: 0 0.85rem 0.6rem 1.1rem;
+  font-size: 0.8125rem;
+}
+
+.lane-data summary {
+  color: var(--muted);
+  cursor: pointer;
+  width: max-content;
+}
+
+.lane-data .table-scroll {
+  max-height: 16rem;
+  overflow: auto;
+  margin-top: 0.4rem;
+}
+
+.empty {
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+  padding: 1.5rem 1.2rem;
+  color: var(--muted);
+}
+
+/* --- the sentence editor ------------------------------------------------------------ */
+
+.editor {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+}
+
+.editor-sentence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.4rem;
+  font-size: 1rem;
+  line-height: 2;
+}
+
+.token-select,
+.token-input {
+  appearance: none;
+  min-height: 2rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-code);
+  font-size: 0.875rem;
+}
+
+.token-select {
+  padding-right: 1.4rem;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.7rem) 52%,
+    calc(100% - 0.4rem) 52%;
+  background-size: 0.3rem 0.3rem;
+  background-repeat: no-repeat;
+}
+
+.token-input {
+  width: 9rem;
+}
+
+.editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+/* --- settings: plans, meters, branding preview ---------------------------------------- */
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+
+.plan {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius);
+}
+
+.plan[data-current='true'] {
+  border-color: var(--border);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.plan-price {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.plan ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.meter {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.meter-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.meter-fill {
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+}
+
+.meter-fill[data-level='warn'] {
+  background: var(--warn);
+}
+
+.meter-fill[data-level='danger'] {
+  background: var(--danger);
+}
+
+.status-word {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  font-weight: 600;
+}
+
+.status-word[data-state='ok'] {
+  color: var(--ok);
+}
+
+.status-word[data-state='warn'] {
+  color: var(--warn);
+}
+
+.status-word[data-state='danger'] {
+  color: var(--danger);
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.swatch {
+  display: grid;
+  gap: 0.3rem;
+  justify-items: start;
+  font-size: 0.8125rem;
+}
+
+.swatch-chip {
+  width: 4.5rem;
+  height: 2rem;
+  border-radius: var(--radius-small);
+  border: 1px solid var(--hairline-strong);
+}
+
+.key-reveal {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+}
+
+.key-reveal code,
+.snippet {
+  display: block;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-small);
+  background: var(--bg);
+  border: 1px solid var(--hairline-strong);
+  overflow-x: auto;
+  white-space: pre;
+  font-size: 0.8125rem;
+}
+
+/* --- status page --------------------------------------------------------------------- */
+
+.status-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* --- narrow screens ------------------------------------------------------------------ */
+
+@media (max-width: 760px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline-strong);
+  }
+
+  .nav {
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
+    overflow-x: auto;
+  }
+
+  .nav-heading,
+  .rail-foot {
+    display: none;
+  }
+
+  .work {
+    padding: 1rem 1rem 2.5rem;
+  }
+
+  .trace-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .axis .axis-label,
+  .axis .axis-readout-head {
+    display: none;
+  }
+
+  /* The axis and every plot keep the same side margins, so the crosshair
+     still lines up when the label and readout stack above and below. */
+  .lane-plot,
+  .axis-track {
+    border-left: 0;
+    border-right: 0;
+    margin: 0 0.85rem;
+  }
+
+  .lane-readout {
+    grid-auto-flow: row;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}

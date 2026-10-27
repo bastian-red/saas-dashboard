@@ -1,0 +1,31 @@
+# gitleaks configuration. Extends the default ruleset and allowlists values that
+# are intentional, non-secret placeholders (CI dummies, build args, example env).
+#
+# Enforced two ways: the pre-commit hook (scripts/pre-commit.mjs) runs
+# `gitleaks protect --staged`, and CI runs `gitleaks detect` over the history.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "CI/build placeholders, the local demo key and documented example env; not real credentials"
+regexes = [
+  # Dummy AUTH_SECRET used only by CI and local test runs (config requires >=16 chars).
+  '''ci-secret-at-least-32-characters-long''',
+  # Placeholder baked into the web Docker build stage; overridden at runtime.
+  '''build-time-placeholder-secret-32chars''',
+  # Fixed, public test values for the CI, integration and load lanes. Real
+  # ones come from .env (gitignored).
+  '''ci-billing-mock-secret-32-chars-x''',
+  '''integration-auth-secret-0123456789''',
+  '''integration-billing-mock-secret''',
+  '''loadtest-auth-secret-0123456789xx''',
+  '''loadtest-billing-mock-secret-xx''',
+  # The seeded demo workspace's API key: a local key for a local database,
+  # published on purpose so the README's curl and scripts/dev-smoke.sh work on
+  # a fresh clone (packages/db/prisma/seed.mts says so where it is defined).
+  '''sk_demo_fieldnote_local_dev_only_0000''',
+]
+paths = [
+  # Documented, value-less example environment file.
+  '''\.env\.example''',
+]

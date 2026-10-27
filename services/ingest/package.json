@@ -1,0 +1,31 @@
+{
+  "name": "@saas/ingest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "POST /v1/events: API-key auth, per-workspace rate limit and monthly quota in one atomic step, micro-batched durable writes under row-level security.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp src/admission.lua dist/admission.lua",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@saas/shared": "workspace:*",
+    "fastify": "^5.2.0",
+    "ioredis": "^5.4.1",
+    "pg": "^8.13.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@saas/config": "workspace:*",
+    "@types/node": "^20.17.6",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

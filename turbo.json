@@ -1,0 +1,82 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+
+  // Turborepo 2 defaults to envMode: "strict". A task's child process sees only
+  // the names listed below plus turbo's own system allowlist; everything else is
+  // stripped with no warning. That is left on deliberately -- it is the reason
+  // scripts/env-contract.mjs can be a meaningful gate -- but it does mean a name
+  // this file forgets is a name the running app never sees.
+  //
+  // Verify with: turbo run dev --dry=json   (it reports globalEnvMode).
+
+  // globalEnv values are hashed into the cache key, so this list is only for
+  // names that change what gets BUILT. A secret must never appear here, because
+  // its value would become part of a hash input.
+  "globalEnv": ["API_BASE_URL", "NODE_ENV"],
+
+  // Runtime configuration. Read by the process, never baked into an artefact,
+  // so a change here must not invalidate a cached build.
+  "globalPassThroughEnv": [
+    "AGGREGATOR_HEALTH_PORT",
+    "AGGREGATOR_INTERNAL_URL",
+    "AGGREGATOR_INTERVAL_MS",
+    "API_PORT",
+    "APP_BASE_URL",
+    "APP_VERSION",
+    "AUTH_SECRET",
+    "AUTH_URL",
+    "BILLING_DRIVER",
+    "BILLING_MOCK_SECRET",
+    "DATABASE_URL",
+    "DIRECT_DATABASE_URL",
+    "INGEST_FLUSH_ROWS",
+    "INGEST_INTERNAL_URL",
+    "INGEST_PORT",
+    "INGEST_PUBLIC_URL",
+    "PORT",
+    "RATE_LIMIT_AUTH",
+    "RATE_LIMIT_GLOBAL",
+    "RATE_LIMIT_INVITE",
+    "REDIS_URL",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "WEB_PORT"
+  ],
+
+  "tasks": {
+    // dependsOn ^build because every app imports workspace packages through
+    // dist/. On a machine that has built once this looks unnecessary; on a clean
+    // checkout it is the difference between a working command and a stack trace
+    // about a missing module.
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test:integration": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "seed": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "migrate:deploy": {
+      "cache": false
+    },
+    "test:e2e": {
+      "cache": false
+    }
+  }
+}

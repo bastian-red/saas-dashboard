@@ -1,0 +1,27 @@
+{
+  "name": "@saas/branding",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tenant accent colours: the WCAG gate a tenant's colour must clear, and the steps derived from it for both schemes. Pure.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@saas/config": "workspace:*",
+    "@types/node": "^20.17.6",
+    "fast-check": "^3.23.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
