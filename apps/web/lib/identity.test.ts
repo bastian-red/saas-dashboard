@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -32,15 +32,18 @@ const IDENTITY = {
 
 const FONTS = ['Atkinson_Hyperlegible_Next', 'Fira_Code', 'Space_Grotesk'];
 
-/** The same regex `web/scripts/identity-distinct.mjs` uses. ONE import, single-quoted. */
+/**
+ * The faces this app loads, by the same rules `web/scripts/identity-distinct.mjs`
+ * applies: the names in a `next/font/google` import, plus the `<Face>` directory
+ * of every self-hosted `./fonts/<Face>/...` file. This app self-hosts all three.
+ */
 function importedFaces(): string[] {
-  const line = /import\s*\{([^}]*)\}\s*from\s*'next\/font\/google'/.exec(layout);
-  if (!line) throw new Error('layout.tsx imports nothing from next/font/google');
-  return line[1]!
-    .split(',')
-    .map((name) => name.trim())
-    .filter(Boolean)
-    .sort();
+  const faces = new Set<string>();
+  const google = /import\s*\{([^}]*)\}\s*from\s*'next\/font\/google'/.exec(layout);
+  for (const name of google?.[1]?.split(',') ?? []) if (name.trim()) faces.add(name.trim());
+  for (const m of layout.matchAll(/'\.\/fonts\/([A-Za-z0-9_]+)\//g)) faces.add(m[1]!);
+  if (faces.size === 0) throw new Error('layout.tsx loads no typeface the identity checks can see');
+  return [...faces].sort();
 }
 
 describe('visual identity', () => {
@@ -56,8 +59,14 @@ describe('visual identity', () => {
     expect(importedFaces()).toEqual(FONTS);
   });
 
-  it('keeps the one font import in the shape the cross-repo check can parse', () => {
-    expect([...layout.matchAll(/from\s*['"]next\/font\/google['"]/g)]).toHaveLength(1);
+  it('self-hosts every face, with its licence beside it, and fetches nothing from Google', () => {
+    // A Google fetch at build time made `next dev` fail intermittently on CI.
+    expect(layout).not.toMatch(/from\s*['"]next\/font\/google['"]/u);
+    for (const face of FONTS) {
+      const dir = join(APP, 'fonts', face);
+      expect(readdirSync(dir).filter((f) => f.endsWith('.woff2')).length, face).toBeGreaterThan(0);
+      expect(readFileSync(join(dir, 'OFL.txt'), 'utf8'), face).toMatch(/SIL Open Font License/u);
+    }
   });
 
   it('wires each face to the variable the stylesheet reads', () => {

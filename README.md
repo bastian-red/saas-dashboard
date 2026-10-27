@@ -141,7 +141,10 @@ new plan's quota applies to the next batch). A canceled subscription falls back 
 Mint lab paper and plum ink by day, forest-black and lavender by night. Space Grotesk for figures
 and headings, Atkinson Hyperlegible Next for chrome (1/l/I and 0/O never collide in a page of
 counts), Fira Code for event names and keys, 5 px corners. Borders only, no shadows: a trace view
-is read edge to edge.
+is read edge to edge. The three faces are self-hosted (`apps/web/app/fonts/`, SIL Open Font
+License beside each), not fetched from Google at build time: that fetch failed intermittently
+under Turbopack on CI, and a build that depends on a third party is not reproducible. An E2E spec
+asserts all three actually load and paint, because a missing font falls back silently.
 
 A tenant's accent tints exactly five marks: the lane rail, primary buttons, the focus ring, the
 workspace monogram and the current-page marker. `services/branding` judges a colour against the
@@ -210,7 +213,7 @@ four processes with no configuration.
 | Ingest load | `./scripts/loadtest.sh` | 2 measurements | Postgres, Redis |
 | Seed determinism + recount | `pnpm db:seed:check` | 2 workspaces | a database |
 | Dev smoke | `./scripts/dev-smoke.sh` | the documented `pnpm dev`, env stripped | datastores up |
-| E2E + accessibility | `./scripts/e2e.sh` | 72 tests (36 x Chromium, Firefox) | datastores up |
+| E2E + accessibility | `./scripts/e2e.sh` | 74 tests (37 x Chromium, Firefox) | datastores up |
 | Demo GIF | `./scripts/demo-gif.sh` | 7 frames | ffmpeg, ImageMagick |
 
 The integration and load lanes use their own databases (`saas_it`, `saas_load`) and Redis indexes.

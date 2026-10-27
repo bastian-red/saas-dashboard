@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Atkinson_Hyperlegible_Next, Fira_Code, Space_Grotesk } from 'next/font/google';
+import localFont from 'next/font/local';
 import type { ReactNode } from 'react';
 
 import './globals.css';
@@ -22,28 +22,50 @@ import './globals.css';
  * - **Fira Code** for what is typed exactly: event names, property tokens in
  *   the sentence editor, API keys, the curl example.
  *
- * ONE import statement, single-quoted, on purpose. `lib/identity.test.ts` and
- * `web/scripts/identity-distinct.mjs` parse it with the same regex.
+ * **Self-hosted, not fetched from Google at build time.** `next/font/google`
+ * downloads the faces during `next dev` and `next build`, and Turbopack's
+ * Google-font resolver failed intermittently on a CI runner ("Can't resolve
+ * '@vercel/turbopack-next/internal/font/google/font'") while passing locally.
+ * A build that depends on a third-party fetch is not reproducible, so the
+ * three variable woff2 files (latin subset, exactly the weights used) live in
+ * `app/fonts/<Face>/` beside their SIL Open Font License. Docker builds need no
+ * network for fonts either.
+ *
+ * The face names are the directory names (`Space_Grotesk`), the same
+ * spelling the Google loaders used. `lib/identity.test.ts` and
+ * `web/scripts/identity-distinct.mjs` read them from the `./fonts/<Face>/`
+ * paths below, so this file stays the one source of truth.
  */
-const display = Space_Grotesk({
-  subsets: ['latin'],
+const display = localFont({
+  src: [
+    {
+      path: './fonts/Space_Grotesk/SpaceGrotesk-latin-wght.woff2',
+      weight: '300 700',
+      style: 'normal',
+    },
+  ],
   display: 'swap',
   variable: '--font-display',
-  weight: ['500', '600', '700'],
 });
 
-const ui = Atkinson_Hyperlegible_Next({
-  subsets: ['latin'],
+const ui = localFont({
+  src: [
+    {
+      path: './fonts/Atkinson_Hyperlegible_Next/AtkinsonHyperlegibleNext-latin-wght.woff2',
+      weight: '200 800',
+      style: 'normal',
+    },
+  ],
   display: 'swap',
   variable: '--font-ui',
-  weight: ['400', '600', '700'],
 });
 
-const mono = Fira_Code({
-  subsets: ['latin'],
+const mono = localFont({
+  src: [
+    { path: './fonts/Fira_Code/FiraCode-latin-wght.woff2', weight: '300 700', style: 'normal' },
+  ],
   display: 'swap',
   variable: '--font-mono',
-  weight: ['400', '500'],
 });
 
 export const metadata: Metadata = {
