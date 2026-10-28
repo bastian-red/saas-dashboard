@@ -144,6 +144,10 @@ export default async function BillingPage({
           {ORDER.map((id) => {
             const p = PLANS[id];
             const current = id === billing.effectivePlan;
+            // Moving down a plan is never the primary action on this page: it
+            // takes seats and events away. An upgrade is primary; a downgrade
+            // is a plain button that says what it is (e2e billing.spec.ts).
+            const downgrade = p.priceUsdMonthly < PLANS[billing.effectivePlan].priceUsdMonthly;
             return (
               <div className="plan" key={id} data-current={current}>
                 <h3>{p.name}</h3>
@@ -163,9 +167,20 @@ export default async function BillingPage({
                   <ActionForm
                     action={checkoutAction}
                     hidden={{ ...hidden, plan: id }}
-                    label={`Choose ${p.name}`}
+                    label={downgrade ? `Downgrade to ${p.name}` : `Upgrade to ${p.name}`}
                   >
-                    <Submit pendingText="Opening checkout">Choose {p.name}</Submit>
+                    <Submit
+                      pendingText="Opening checkout"
+                      className={downgrade ? 'button' : 'button button-primary'}
+                    >
+                      {downgrade ? `Downgrade to ${p.name}` : `Upgrade to ${p.name}`}
+                    </Submit>
+                    {downgrade ? (
+                      <p className="field-hint">
+                        Drops to {formatCompact(p.monthlyEvents)} events and {p.seats} seats at the
+                        end of the period.
+                      </p>
+                    ) : null}
                   </ActionForm>
                 ) : null}
               </div>

@@ -94,7 +94,7 @@ for (const scheme of SCHEMES) {
       await signIn(page);
       await page.goto(`/w/${MAIN_SLUG}/settings/branding`);
       await page.getByTestId('accent-hex').fill('#ffd400');
-      await expect(page.getByText(/Would not be readable everywhere/u)).toBeVisible();
+      await expect(page.getByTestId('accent-refusal')).toBeVisible();
       await scan(page, testInfo, '/w/:slug/settings/branding', scheme);
     });
 

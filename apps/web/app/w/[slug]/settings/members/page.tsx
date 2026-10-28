@@ -56,7 +56,7 @@ export default async function MembersPage({ params }: { params: Promise<{ slug: 
           People in this workspace
         </h2>
         <div className="panel table-scroll">
-          <table className="table">
+          <table className="table table-stack">
             <thead>
               <tr>
                 <th scope="col">Name</th>
@@ -75,12 +75,16 @@ export default async function MembersPage({ params }: { params: Promise<{ slug: 
                   !me && can(workspace.role, 'member.role') && canAssign(workspace.role, m.role);
                 return (
                   <tr key={m.userId} data-testid="member-row">
-                    <td>
-                      {m.name}
-                      {me ? <span className="muted"> (you)</span> : null}
+                    <td data-label="Name">
+                      <span>
+                        {m.name}
+                        {me ? <span className="muted"> (you)</span> : null}
+                      </span>
                     </td>
-                    <td className="mono">{m.email}</td>
-                    <td>
+                    <td className="mono" data-label="Email">
+                      {m.email}
+                    </td>
+                    <td data-label="Role">
                       {editable ? (
                         <ActionForm
                           action={changeRoleAction}
@@ -108,8 +112,8 @@ export default async function MembersPage({ params }: { params: Promise<{ slug: 
                         m.role
                       )}
                     </td>
-                    <td>{formatDate(m.joinedAt, tz)}</td>
-                    <td>
+                    <td data-label="Joined">{formatDate(m.joinedAt, tz)}</td>
+                    <td data-label="">
                       {!me &&
                       can(workspace.role, 'member.remove') &&
                       canAssign(workspace.role, m.role) ? (
@@ -168,7 +172,7 @@ export default async function MembersPage({ params }: { params: Promise<{ slug: 
           </ActionForm>
           {invites.length > 0 ? (
             <div className="panel table-scroll">
-              <table className="table">
+              <table className="table table-stack">
                 <caption className="visually-hidden">Pending invites</caption>
                 <thead>
                   <tr>
@@ -183,9 +187,11 @@ export default async function MembersPage({ params }: { params: Promise<{ slug: 
                 <tbody>
                   {invites.map((i) => (
                     <tr key={i.id}>
-                      <td className="mono">{i.email}</td>
-                      <td>{i.role}</td>
-                      <td>{formatDate(i.expiresAt, tz)}</td>
+                      <td className="mono" data-label="Invited">
+                        {i.email}
+                      </td>
+                      <td data-label="Role">{i.role}</td>
+                      <td data-label="Expires">{formatDate(i.expiresAt, tz)}</td>
                       <td>
                         <ActionForm
                           action={revokeInviteAction}

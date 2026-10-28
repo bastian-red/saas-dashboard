@@ -39,7 +39,7 @@ test.describe('dark scheme', () => {
     await page.goto(`/w/${SECOND_SLUG}`);
     const bg = await page.locator('.ws-mark').evaluate((e) => getComputedStyle(e).backgroundColor);
     expect(bg).not.toBe(rgb(SECOND_ACCENT));
-    expect(bg).not.toBe(rgb('#b9a6ee')); // and not the product's dark plum either
+    expect(bg).not.toBe(rgb('#de88f2')); // and not the product's dark orchid either
   });
 });
 
@@ -51,7 +51,13 @@ test('an unreadable accent is refused with the nearest passing shade, which then
   await page.goto(`/w/${slug}/settings/branding`);
   const hex = page.getByTestId('accent-hex');
   await hex.fill('#ffd400');
-  await expect(page.getByText(/Would not be readable everywhere/u)).toBeVisible();
+  // The refusal is a table of every surface, each pass or fail in words.
+  const refusal = page.getByTestId('accent-refusal');
+  await expect(refusal).toBeVisible();
+  await expect(refusal.locator('tbody tr')).toHaveCount(5);
+  await expect(refusal.locator('tr[data-pass="false"]')).toHaveCount(3);
+  await expect(refusal.locator('tr[data-pass="false"]').first()).toContainText('✕ Fails');
+  await expect(refusal.locator('tr[data-pass="false"]').first()).toContainText('1.00:1');
 
   // The API refuses it too, whatever the page shows.
   await page.getByRole('button', { name: 'Save accent' }).click();

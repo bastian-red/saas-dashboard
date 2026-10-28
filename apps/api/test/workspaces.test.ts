@@ -259,7 +259,7 @@ describe('branding', () => {
       { user: owner, body: { accent: '#5A4590' } },
     );
     expect(ok.status).toBe(200);
-    expect(ok.body.dark.accent).toBe('#9581d2');
+    expect(ok.body.dark.accent).toBe('#8d7aca');
     const list = await call<Workspace[]>(harness, 'GET', '/workspaces', { user: owner });
     expect(list.body.find((x) => x.slug === w.slug)?.branding?.light.accent).toBe('#5a4590');
 
@@ -272,8 +272,11 @@ describe('branding', () => {
     expect(bad.status).toBe(422);
     expect(bad.body.details).toEqual({
       field: 'accent',
-      issues: ['light: #2563eb on panels (#cdeee6) is 4.18:1, needs 4.5:1'],
-      suggestion: '#1f5ce4',
+      issues: [
+        'light: #2563eb on the page (#d0d9db) is 3.60:1, needs 4.5:1',
+        'light: #2563eb on panels (#dfe5e7) is 4.06:1, needs 4.5:1',
+      ],
+      suggestion: '#1451d8',
     });
 
     expect(

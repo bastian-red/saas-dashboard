@@ -4,6 +4,7 @@ import type { DashboardData, Lane, LaneResult } from '@saas/shared';
 import Link from 'next/link';
 import {
   useCallback,
+  useId,
   useState,
   type KeyboardEvent,
   type PointerEvent,
@@ -13,7 +14,6 @@ import {
 import { moveLaneAction, removeLaneAction, resizeLaneAction } from '../app/w/actions';
 import {
   areaPath,
-  axisTicks,
   bucketAt,
   laneMax,
   linePath,
@@ -30,7 +30,9 @@ import {
   formatError,
   formatWhole,
 } from '../lib/format';
+import { bucketTotals, formatChange, rollCall, VERDICT_DISPLAY, type Call } from '../lib/rollcall';
 import { sentence } from '../lib/sentence';
+import { calendarTicks } from '../lib/ticks';
 import { ActionForm } from './action-form';
 
 /**
@@ -101,94 +103,212 @@ export function Trace({ data, lanes, slug, dashboardId, canWrite }: TraceProps) 
     setIndex(Math.min(n - 1, Math.max(0, next)));
   };
 
-  const ticks = axisTicks(n);
+  const ticks = calendarTicks(data.buckets, data.bucket, data.tz);
+  const calls = new Map(
+    data.lanes.map((r) => [r.laneId, rollCall(bucketTotals(r.points), data.bucket)] as const),
+  );
   const cursorLabel =
     index === null ? null : formatBucket(data.buckets[index]!, data.bucket, data.tz);
 
   return (
-    <div className="trace" onPointerLeave={() => setIndex(null)}>
-      <div className="trace-row axis">
-        <div className="axis-label">
-          {lanes.length === 1 ? '1 lane' : `${String(lanes.length)} lanes`}
-        </div>
-        <div
-          className="axis-track"
-          role="slider"
-          tabIndex={0}
-          aria-label="Time cursor: read every lane at one moment"
-          aria-valuemin={0}
-          aria-valuemax={Math.max(0, n - 1)}
-          aria-valuenow={index ?? n - 1}
-          aria-valuetext={
-            index === null
-              ? 'Whole range'
-              : formatBucketLong(data.buckets[index]!, data.bucket, data.tz)
-          }
-          onKeyDown={onKey}
-          onBlur={() => setIndex(null)}
-          onPointerMove={fromPointer}
-          onPointerDown={fromPointer}
-          data-testid="axis"
-        >
-          {ticks.map((i) => (
-            <span
-              key={i}
-              className="axis-tick"
-              // A tick under the cursor's label is hidden, not overlapped: two
-              // dates printed on top of each other read as neither.
-              style={{
-                left: `${String((slot(i, n).left / PLOT_WIDTH) * 100)}%`,
-                visibility:
-                  index !== null &&
-                  Math.abs(slot(i, n).left - slot(index, n).mid) < PLOT_WIDTH * 0.07
-                    ? 'hidden'
-                    : undefined,
-              }}
-              aria-hidden="true"
-            >
-              {formatBucket(data.buckets[i]!, data.bucket, data.tz)}
-            </span>
-          ))}
-          {index !== null ? (
-            <span
-              className="axis-cursor"
-              style={{ left: `${String((slot(index, n).mid / PLOT_WIDTH) * 100)}%` }}
-              aria-hidden="true"
-            >
-              {cursorLabel}
-            </span>
-          ) : null}
-        </div>
-        <div className="axis-readout-head" aria-live="polite" data-testid="readout-head">
-          {index === null ? 'Whole range' : cursorLabel}
-        </div>
-      </div>
-
-      {lanes.map((lane, position) => {
-        const result = results.get(lane.id);
-        return (
-          <LaneRow
-            key={lane.id}
-            lane={lane}
-            result={result}
-            data={data}
-            index={index}
-            onPointer={fromPointer}
-            tools={
-              canWrite ? (
-                <LaneTools
-                  slug={slug}
-                  dashboardId={dashboardId}
-                  lane={lane}
-                  first={position === 0}
-                  last={position === lanes.length - 1}
-                />
-              ) : null
+    <>
+      <RollCall lanes={lanes} calls={calls} data={data} />
+      <div className="trace" onPointerLeave={() => setIndex(null)}>
+        <div className="trace-row axis">
+          <div className="axis-label">
+            {lanes.length === 1 ? '1 lane' : `${String(lanes.length)} lanes`}
+          </div>
+          <div
+            className="axis-track"
+            role="slider"
+            tabIndex={0}
+            aria-label="Time cursor: read every lane at one moment"
+            aria-valuemin={0}
+            aria-valuemax={Math.max(0, n - 1)}
+            aria-valuenow={index ?? n - 1}
+            aria-valuetext={
+              index === null
+                ? 'Whole range'
+                : formatBucketLong(data.buckets[index]!, data.bucket, data.tz)
             }
-          />
-        );
-      })}
-    </div>
+            onKeyDown={onKey}
+            onBlur={() => setIndex(null)}
+            onPointerMove={fromPointer}
+            onPointerDown={fromPointer}
+            data-testid="axis"
+          >
+            {ticks.map((tick) => (
+              <span
+                key={tick.index}
+                className="axis-tick"
+                data-testid="axis-tick"
+                // A tick under the cursor's label is hidden, not overlapped: two
+                // dates printed on top of each other read as neither.
+                style={{
+                  left: `${String((slot(tick.index, n).left / PLOT_WIDTH) * 100)}%`,
+                  visibility:
+                    index !== null &&
+                    Math.abs(slot(tick.index, n).left - slot(index, n).mid) < PLOT_WIDTH * 0.07
+                      ? 'hidden'
+                      : undefined,
+                }}
+                aria-hidden="true"
+              >
+                {tick.label}
+              </span>
+            ))}
+            {index !== null ? (
+              <span
+                className="axis-cursor"
+                style={{ left: `${String((slot(index, n).mid / PLOT_WIDTH) * 100)}%` }}
+                aria-hidden="true"
+              >
+                {cursorLabel}
+              </span>
+            ) : null}
+          </div>
+          <div className="axis-readout-head" aria-live="polite" data-testid="readout-head">
+            {index === null ? 'Whole range' : cursorLabel}
+          </div>
+        </div>
+
+        {lanes.map((lane, position) => {
+          const result = results.get(lane.id);
+          return (
+            <LaneRow
+              key={lane.id}
+              lane={lane}
+              result={result}
+              data={data}
+              index={index}
+              call={calls.get(lane.id)}
+              onPointer={fromPointer}
+              tools={
+                canWrite ? (
+                  <LaneTools
+                    slug={slug}
+                    dashboardId={dashboardId}
+                    lane={lane}
+                    first={position === 0}
+                    last={position === lanes.length - 1}
+                  />
+                ) : null
+              }
+            />
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+/** "Tue 27 Oct" for a day bucket, "Wed 14:00" for an hour bucket: the bucket the roll call judged. */
+function judgedLabel(data: DashboardData, call: Call | undefined): string | null {
+  if (call?.index == null) return null;
+  return formatBucketLong(data.buckets[call.index]!, data.bucket, data.tz);
+}
+
+/**
+ * The roll call: the first thing on the dashboard, so the morning question
+ * ("did anything move?") is answered before anyone reads a chart. Each lane
+ * answers up, down, steady or no baseline, as a glyph AND a word; a lane that
+ * moved wears the accent, because "moved" is the thing to look at, not "good"
+ * or "bad" (sign-ups up is good news, errors up is not). Each entry jumps to
+ * its lane. `lib/rollcall.ts` says how a verdict is reached.
+ */
+function RollCall({
+  lanes,
+  calls,
+  data,
+}: {
+  lanes: readonly Lane[];
+  calls: ReadonlyMap<string, Call>;
+  data: DashboardData;
+}) {
+  if (lanes.length === 0) return null;
+  const first = calls.values().next().value as Call | undefined;
+  const judged = judgedLabel(data, first);
+  const moved = lanes.filter((l) => {
+    const v = calls.get(l.id)?.verdict;
+    return v === 'up' || v === 'down';
+  }).length;
+  const baseline =
+    data.bucket === 'day' ? 'the same weekday in earlier weeks' : 'the same hour on earlier days';
+  return (
+    <section className="rollcall" aria-labelledby="rollcall-title" data-testid="rollcall">
+      <div className="rollcall-head">
+        <h2 id="rollcall-title" className="rollcall-title">
+          Roll call
+        </h2>
+        <p className="rollcall-summary">
+          <strong>
+            {moved === 0
+              ? 'Nothing moved'
+              : moved === 1
+                ? '1 lane moved'
+                : `${String(moved)} lanes moved`}
+          </strong>
+          {judged === null ? null : (
+            <>
+              {' '}
+              · {judged} against {baseline}
+            </>
+          )}
+        </p>
+      </div>
+      <ol className="rollcall-list">
+        {lanes.map((lane) => {
+          const call = calls.get(lane.id);
+          const verdict = call?.verdict ?? 'unknown';
+          const display = VERDICT_DISPLAY[verdict];
+          const name =
+            lane.title ??
+            sentence(lane.spec)
+              .map((p) => p.text)
+              .join(' ');
+          return (
+            <li key={lane.id}>
+              <a className="rollcall-entry" href={`#row-${lane.id}`} data-verdict={verdict}>
+                <span className="verdict" data-verdict={verdict}>
+                  <span aria-hidden="true">{display.glyph}</span> {display.word}
+                  {call !== undefined && (verdict === 'up' || verdict === 'down')
+                    ? ` ${formatChange(call)}`
+                    : ''}
+                </span>
+                <span className="rollcall-name">{name}</span>
+              </a>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
+/** The verdict at the head of a lane, with the two numbers it was reached from. */
+function LaneVerdict({ call, data }: { call: Call | undefined; data: DashboardData }) {
+  const verdict = call?.verdict ?? 'unknown';
+  const display = VERDICT_DISPLAY[verdict];
+  return (
+    <p className="lane-verdict" data-testid="lane-verdict" data-verdict={verdict}>
+      <span className="verdict" data-verdict={verdict}>
+        <span aria-hidden="true">{display.glyph}</span> {display.word}
+        {call !== undefined && (verdict === 'up' || verdict === 'down')
+          ? ` ${formatChange(call)}`
+          : ''}
+      </span>
+      {call === undefined || call.index === null ? null : verdict === 'unknown' ? (
+        <span className="lane-verdict-detail">Not enough earlier {data.bucket}s to compare</span>
+      ) : (
+        <span className="lane-verdict-detail">
+          {judgedLabel(data, call)}: {formatCompact(call.latest)} against a typical{' '}
+          {formatCompact(call.typical)}
+          {call.range === null
+            ? ''
+            : `; steady from ${formatCompact(call.range.low)} to ${formatCompact(call.range.high)}`}
+        </span>
+      )}
+    </p>
   );
 }
 
@@ -197,6 +317,7 @@ function LaneRow({
   result,
   data,
   index,
+  call,
   onPointer,
   tools,
 }: {
@@ -204,6 +325,7 @@ function LaneRow({
   readonly result: LaneResult | undefined;
   readonly data: DashboardData;
   readonly index: number | null;
+  readonly call: Call | undefined;
   readonly onPointer: (e: PointerEvent<HTMLElement>) => void;
   readonly tools: ReactNode;
 }) {
@@ -218,11 +340,13 @@ function LaneRow({
       aria-labelledby={labelId}
       data-testid="lane"
       data-lane={lane.id}
+      id={`row-${lane.id}`}
     >
       <div className="lane-label">
         <h2 className="lane-title" id={labelId}>
           {name}
         </h2>
+        <LaneVerdict call={call} data={data} />
         <p className="lane-sentence">
           {pieces.map((p, i) =>
             p.kind === 'token' ? (
@@ -239,6 +363,7 @@ function LaneRow({
 
       <div
         className="lane-plot"
+        data-viz={lane.spec.viz}
         style={{ height: `${String(height)}px` }}
         onPointerMove={onPointer}
         onPointerDown={onPointer}
@@ -288,6 +413,44 @@ function Plot({
 
   if (viz === 'table') return <BreakdownTable result={result} />;
 
+  if (viz === 'number') {
+    // The figure owns its own row and the sparkline takes the rest of the lane
+    // below it: drawn over the line, a peak ran through the digits. e2e
+    // layout.spec.ts asserts the two boxes never intersect.
+    return (
+      <>
+        <div className="lane-figure" data-testid="lane-figure">
+          <strong>
+            {lane.spec.metric === 'sum' && lane.spec.sumProperty === 'amount'
+              ? `$${formatWhole(result.total)}`
+              : formatWhole(result.total)}
+          </strong>
+          <span>whole range{result.error === null ? '' : `, ${formatError(result.error)}`}</span>
+        </div>
+        <svg
+          className="plot-surface number-spark"
+          data-testid="number-spark"
+          viewBox={`0 0 ${String(PLOT_WIDTH)} ${String(height)}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={empty ? 'No events in this range' : 'Trend over the range'}
+        >
+          <path className="plot-area series-1" d={areaPath(totals, top, height - 2)} />
+          <path className="plot-line series-1" d={linePath(totals, top, height - 2)} />
+          {index !== null ? (
+            <line
+              className="plot-crosshair"
+              x1={slot(index, n).mid}
+              x2={slot(index, n).mid}
+              y1={0}
+              y2={height}
+            />
+          ) : null}
+        </svg>
+      </>
+    );
+  }
+
   return (
     <>
       <svg
@@ -297,14 +460,14 @@ function Plot({
         role="img"
         aria-label={empty ? 'No events in this range' : `Chart, axis up to ${formatCompact(top)}`}
       >
-        {viz === 'number' ? null : (
+        {
           // Top, middle and baseline: the top is the one labelled value (plot-top).
           <>
             <line className="plot-grid" x1="0" x2={PLOT_WIDTH} y1={0.5} y2={0.5} />
             <line className="plot-grid" x1="0" x2={PLOT_WIDTH} y1={plotH / 2} y2={plotH / 2} />
             <line className="plot-grid" x1="0" x2={PLOT_WIDTH} y1={plotH - 0.5} y2={plotH - 0.5} />
           </>
-        )}
+        }
         {viz === 'stacked'
           ? stackedSegments(result.points, top, plotH).map((s, i) => (
               <rect
@@ -337,19 +500,6 @@ function Plot({
               );
             })
           : null}
-        {viz === 'number' ? (
-          // The sparkline keeps to the lower half; the figure owns the top.
-          <g transform={`translate(0 ${String(Math.round(height * 0.5))})`}>
-            <path
-              className="plot-area series-1"
-              d={areaPath(totals, top, height - Math.round(height * 0.5) - 2)}
-            />
-            <path
-              className="plot-line series-1"
-              d={linePath(totals, top, height - Math.round(height * 0.5) - 2)}
-            />
-          </g>
-        ) : null}
         {index !== null ? (
           <line
             className="plot-crosshair"
@@ -370,21 +520,9 @@ function Plot({
             />
           ))
         : null}
-      {viz !== 'number' ? (
-        <span className="plot-top" aria-hidden="true">
-          {formatCompact(top)}
-        </span>
-      ) : null}
-      {viz === 'number' ? (
-        <div className="lane-figure">
-          <strong>
-            {lane.spec.metric === 'sum' && lane.spec.sumProperty === 'amount'
-              ? `$${formatWhole(result.total)}`
-              : formatWhole(result.total)}
-          </strong>
-          <span>whole range{result.error === null ? '' : `, ${formatError(result.error)}`}</span>
-        </div>
-      ) : null}
+      <span className="plot-top" aria-hidden="true">
+        {formatCompact(top)}
+      </span>
       {empty ? (
         <span className="plot-top" style={{ top: '45%', left: '40%' }}>
           No events in this range
@@ -559,6 +697,12 @@ function LaneTable({
   );
 }
 
+/**
+ * A lane's tools. Edit is the one thing done often, so it stays visible; the
+ * rest (move, resize, remove) live in one labelled menu instead of a row of
+ * bare glyphs, and Remove asks once more, in words, before it acts: it used to
+ * sit, always red, one stray click from deleting a lane.
+ */
 function LaneTools({
   slug,
   dashboardId,
@@ -574,6 +718,8 @@ function LaneTools({
 }) {
   const hidden = { workspace: slug, dashboard: dashboardId, lane: lane.id };
   const title = lane.title ?? 'lane';
+  const [confirming, setConfirming] = useState(false);
+  const confirmId = useId();
   return (
     <div className="lane-tools">
       <Link
@@ -583,61 +729,96 @@ function LaneTools({
       >
         Edit
       </Link>
-      <ActionForm action={moveLaneAction} hidden={{ ...hidden, direction: 'up' }}>
-        <button
-          className="button button-quiet button-small"
-          type="submit"
-          disabled={first}
-          aria-label={`Move ${title} up`}
-        >
-          ↑
-        </button>
-      </ActionForm>
-      <ActionForm action={moveLaneAction} hidden={{ ...hidden, direction: 'down' }}>
-        <button
-          className="button button-quiet button-small"
-          type="submit"
-          disabled={last}
-          aria-label={`Move ${title} down`}
-        >
-          ↓
-        </button>
-      </ActionForm>
-      <ActionForm
-        action={resizeLaneAction}
-        hidden={{ ...hidden, height: String(Math.max(10, lane.height - 4)) }}
+      <details
+        className="lane-menu"
+        onToggle={(e) => !e.currentTarget.open && setConfirming(false)}
       >
-        <button
-          className="button button-quiet button-small"
-          type="submit"
-          disabled={lane.height <= 10}
-          aria-label={`Make ${title} shorter`}
-        >
-          −
-        </button>
-      </ActionForm>
-      <ActionForm
-        action={resizeLaneAction}
-        hidden={{ ...hidden, height: String(Math.min(60, lane.height + 4)) }}
-      >
-        <button
-          className="button button-quiet button-small"
-          type="submit"
-          disabled={lane.height >= 60}
-          aria-label={`Make ${title} taller`}
-        >
-          +
-        </button>
-      </ActionForm>
-      <ActionForm action={removeLaneAction} hidden={hidden}>
-        <button
-          className="button button-quiet button-small button-danger"
-          type="submit"
-          aria-label={`Remove ${title}`}
-        >
-          Remove
-        </button>
-      </ActionForm>
+        <summary className="button button-quiet button-small" aria-label={`More for ${title}`}>
+          More
+        </summary>
+        <div className="lane-menu-body">
+          <ActionForm action={moveLaneAction} hidden={{ ...hidden, direction: 'up' }}>
+            <button
+              className="menu-item"
+              type="submit"
+              disabled={first}
+              aria-label={`Move ${title} up`}
+            >
+              <span aria-hidden="true">↑</span> Move up
+            </button>
+          </ActionForm>
+          <ActionForm action={moveLaneAction} hidden={{ ...hidden, direction: 'down' }}>
+            <button
+              className="menu-item"
+              type="submit"
+              disabled={last}
+              aria-label={`Move ${title} down`}
+            >
+              <span aria-hidden="true">↓</span> Move down
+            </button>
+          </ActionForm>
+          <ActionForm
+            action={resizeLaneAction}
+            hidden={{ ...hidden, height: String(Math.max(10, lane.height - 4)) }}
+          >
+            <button
+              className="menu-item"
+              type="submit"
+              disabled={lane.height <= 10}
+              aria-label={`Make ${title} shorter`}
+            >
+              <span aria-hidden="true">−</span> Shorter
+            </button>
+          </ActionForm>
+          <ActionForm
+            action={resizeLaneAction}
+            hidden={{ ...hidden, height: String(Math.min(60, lane.height + 4)) }}
+          >
+            <button
+              className="menu-item"
+              type="submit"
+              disabled={lane.height >= 60}
+              aria-label={`Make ${title} taller`}
+            >
+              <span aria-hidden="true">+</span> Taller
+            </button>
+          </ActionForm>
+          <div className="menu-separator" role="separator" />
+          {confirming ? (
+            <ActionForm action={removeLaneAction} hidden={hidden} className="menu-confirm">
+              <p id={confirmId} className="menu-confirm-text">
+                Remove <strong>{title}</strong> from this dashboard? Its events are kept.
+              </p>
+              <div className="inline-form">
+                <button
+                  className="button button-small button-danger-solid"
+                  type="submit"
+                  aria-label={`Remove ${title}`}
+                  aria-describedby={confirmId}
+                >
+                  Remove lane
+                </button>
+                <button
+                  className="button button-small"
+                  type="button"
+                  onClick={() => setConfirming(false)}
+                >
+                  Keep it
+                </button>
+              </div>
+            </ActionForm>
+          ) : (
+            <button
+              className="menu-item menu-item-danger"
+              type="button"
+              onClick={() => setConfirming(true)}
+              aria-label={`Remove ${title}…`}
+            >
+              <span aria-hidden="true">✕</span> Remove…
+            </button>
+          )}
+        </div>
+      </details>
     </div>
   );
 }

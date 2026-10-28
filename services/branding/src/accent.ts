@@ -33,23 +33,23 @@ export interface Surfaces {
 
 /** The product's own backgrounds. apps/web's branding gate asserts these equal globals.css. */
 export const LIGHT: Surfaces = {
-  bg: '#e1f7f2',
-  surface: '#f8fefc',
-  surface2: '#cdeee6',
-  text: '#0c2621',
+  bg: '#d0d9db',
+  surface: '#eef2f3',
+  surface2: '#dfe5e7',
+  text: '#10181a',
 };
 export const DARK: Surfaces = {
-  bg: '#021409',
-  surface: '#071f16',
-  surface2: '#0e2c21',
-  text: '#e4f6ef',
+  bg: '#050a0b',
+  surface: '#0d1517',
+  surface2: '#152023',
+  text: '#e8eef0',
 };
 
 export const AA_TEXT = 4.5;
 const SOFT_ALPHA = 0.14;
 const WHITE = '#ffffff';
 /** The dark label for a light fill: the light scheme's text colour, in both schemes. */
-const DARK_INK = '#0c2621';
+const DARK_INK = '#10181a';
 
 export interface Step {
   accent: string;
@@ -144,4 +144,80 @@ export function suggestAccent(input: string): string | null {
     }
   }
   return null;
+}
+
+/**
+ * What a tenant's stored accent paints as TODAY, re-judged against the current
+ * surfaces on every render.
+ *
+ * Stored branding was judged against the backgrounds of the day it was saved.
+ * The product's own palette can change after that (it did, 2026-10-28: Harbor
+ * Labs' #b4235a cleared 4.5:1 on the old mint page and reaches 4.40:1 on the
+ * new console grey). Painting the stored steps as-is would silently break the
+ * promise that a tenant accent can never cost contrast, so:
+ *
+ * - still passing: its steps, freshly derived (the dark step too);
+ * - no longer passing: the nearest passing shade, the same suggestion the
+ *   settings page offers, and the admin is told;
+ * - nothing passes: the product's own accent.
+ */
+export type EffectiveBranding =
+  | { kind: 'stored'; requested: string; light: Step; dark: Step }
+  | { kind: 'adjusted'; requested: string; used: string; light: Step; dark: Step }
+  | { kind: 'product'; requested: string };
+
+export function effectiveBranding(requested: string): EffectiveBranding {
+  // Stored data is read on every render; a malformed value must fall back, never throw.
+  if (!/^#[0-9a-f]{6}$/iu.test(requested)) return { kind: 'product', requested };
+  const now = checkAccent(requested);
+  if (now.ok) return { kind: 'stored', requested, light: now.light, dark: now.dark };
+  const used = suggestAccent(requested);
+  if (used !== null) {
+    const adjusted = checkAccent(used);
+    if (adjusted.ok)
+      return { kind: 'adjusted', requested, used, light: adjusted.light, dark: adjusted.dark };
+  }
+  return { kind: 'product', requested };
+}
+
+/** One pair an accent is painted in, measured: what the settings page draws as a table row. */
+export interface PairRow {
+  readonly where: string;
+  readonly foreground: string;
+  readonly background: string;
+  readonly ratio: number;
+  readonly pass: boolean;
+}
+
+/**
+ * Every light-scheme pair `input` would be painted in, passing or not, plus
+ * whether a dark-scheme shade exists. The same measurements `stepIssues`
+ * words as sentences, as rows, so a refusal can show which surfaces fail and
+ * by how much instead of one paragraph of hexes. Null for a malformed colour.
+ */
+export function accentReport(input: string): { rows: PairRow[]; darkShade: string | null } | null {
+  const accent = input.toLowerCase();
+  if (!/^#[0-9a-f]{6}$/u.test(accent)) return null;
+  const step = stepFor(accent, LIGHT);
+  const row = (where: string, foreground: string, background: string): PairRow => {
+    // Judged on the exact ratio, shown rounded: 4.497 must fail like checkAccent says, not read as 4.50.
+    const exact = contrast(foreground, background);
+    return {
+      where,
+      foreground,
+      background,
+      ratio: Number(exact.toFixed(2)),
+      pass: exact >= AA_TEXT,
+    };
+  };
+  return {
+    rows: [
+      row('Text on the page', step.accent, LIGHT.bg),
+      row('Text on cards', step.accent, LIGHT.surface),
+      row('Text on panels', step.accent, LIGHT.surface2),
+      row('Button label', step.ink, step.accent),
+      row('Text on the tint', LIGHT.text, step.soft),
+    ],
+    darkShade: deriveDark(accent),
+  };
 }

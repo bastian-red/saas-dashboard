@@ -59,6 +59,14 @@ const steps = [
     required: true,
   },
   {
+    // The same check CI's quality job runs. Without it a change can pass every
+    // local lane and go red on CI for formatting alone (009 did, 2026-10-28).
+    name: 'prettier (format check, same globs as CI)',
+    cmd: 'pnpm',
+    args: ['exec', 'prettier', '--check', '--log-level', 'warn', '**/*.{ts,tsx,js,cjs,mjs,json}'],
+    required: true,
+  },
+  {
     name: 'gate tests',
     cmd: 'pnpm',
     args: ['run', 'test'],

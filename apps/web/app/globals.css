@@ -1,11 +1,13 @@
 /*
- * saas-dashboard: "the trace viewer".
+ * saas-dashboard: "the go / no-go poll" (docs/DESIGN.md).
  *
- * A product team reads this at the start of the day to answer one question:
- * is the product healthy? So the page is built like an instrument's trace
- * view, not a wall of cards: every lane runs the full width on ONE shared time
- * axis, and one crosshair reads every lane at the same instant. Mint lab paper
- * and plum ink by day; forest-black and lavender by night.
+ * A product team opens this at the start of the day to answer one question:
+ * is anything wrong? The world is the control room's poll: every lane answers
+ * for itself (up, down, steady, or no baseline) before anyone reads a chart,
+ * and the lanes still run full width on ONE shared time axis with one
+ * crosshair through all of them. Console grey and signal orchid by day; the
+ * same room with the lights down by night. Square corners, hairline seams, no
+ * shadows: consoles are read edge to edge.
  *
  * Every colour below is gated:
  *   lib/identity.test.ts    pins canvas, accent, radius and faces
@@ -13,59 +15,58 @@
  *   lib/tokens.test.ts      no var() resolves to nothing
  *   lib/branding.test.ts    the tenant's accent reaches only the allowed marks,
  *                           and services/branding judges it on these surfaces
- *
- * Depth is borders-only: hairlines between lanes, no shadows, because a trace
- * view is read edge to edge and a shadow would make one lane look more
- * important than its neighbour.
  */
 
 :root {
   color-scheme: light;
 
-  /* Paper: the canvas, the lane surface, the inset panels. services/branding
-     judges every tenant accent against exactly these three (branding.test.ts). */
-  --bg: #e1f7f2;
-  --surface: #f8fefc;
-  --surface-2: #cdeee6;
+  /* Console paint: the canvas, the card surface, the inset panels.
+     services/branding judges every tenant accent against exactly these three
+     (branding.test.ts), and re-judges stored accents on every render. */
+  --bg: #d0d9db;
+  --surface: #eef2f3;
+  --surface-2: #dfe5e7;
 
   /* Ink */
-  --text: #0c2621;
-  --muted: #3b5c53;
+  --text: #10181a;
+  --muted: #3d4b50;
 
-  /* The product's own accent: plum. */
-  --accent: #5a4590;
+  /* The product's own accent: signal orchid, the colour of a lamp that wants
+     attention. The roll call wears it on every lane that moved. */
+  --accent: #86269b;
   --accent-ink: #ffffff;
-  --accent-soft: #e2e4ed;
+  --accent-soft: #e6d9ec;
 
   /* Control edges must clear 3:1; hairlines are structure and need not. */
-  --border: #658880;
-  --hairline: rgba(12, 38, 33, 0.12);
-  --hairline-strong: rgba(12, 38, 33, 0.24);
+  --border: #5a696e;
+  --hairline: rgba(16, 24, 26, 0.14);
+  --hairline-strong: rgba(16, 24, 26, 0.28);
 
   /* State. Always with a glyph and a word (contrast.test.ts measures why). */
-  --ok: #1d6b35;
-  --warn: #7a5300;
-  --danger: #a3283a;
-  --danger-soft: #f6e6e7;
+  --ok: #1d6b37;
+  --warn: #7a5200;
+  --danger: #a3122a;
+  --danger-soft: #f8dfe2;
 
-  /* Chart series, validated with the dataviz validator in this order. Fixed
-     order, never cycled; a fourth key folds into Other. */
-  --series-1: #6a50a7;
-  --series-2: #c0612b;
-  --series-3: #1f7fb8;
-  --series-other: #6f807a;
-  --crosshair: #0c2621;
+  /* Chart series, validated with the dataviz validator in this order on every
+     surface. Fixed order, never cycled; a fourth key folds into Other. */
+  --series-1: #2f6db0;
+  --series-2: #c25a17;
+  --series-3: #20876a;
+  --series-other: #66757a;
+  --crosshair: #10181a;
 
   /* The tenant's accent. A workspace with branding sets the --tenant-* names
      inline on the shell (app/w/[slug]/layout.tsx); without it every --brand
-     falls back to the product's plum. --brand is worn ONLY by the lane rail,
-     primary buttons, the focus ring and the current-page marker. */
+     falls back to the product's orchid. --brand is worn ONLY by the lane rail,
+     primary buttons, the focus ring, the workspace monogram and the
+     current-page marker. */
   --brand: var(--tenant-accent-light, var(--accent));
   --brand-ink: var(--tenant-ink-light, var(--accent-ink));
   --brand-soft: var(--tenant-soft-light, var(--accent-soft));
 
-  --radius: 5px;
-  --radius-small: 3px;
+  --radius: 0px;
+  --radius-small: 0px;
   --rail-width: 15.5rem;
   --readout-width: 9.5rem;
   --label-width: 17rem;
@@ -90,31 +91,31 @@
   :root {
     color-scheme: dark;
 
-    --bg: #021409;
-    --surface: #071f16;
-    --surface-2: #0e2c21;
+    --bg: #050a0b;
+    --surface: #0d1517;
+    --surface-2: #152023;
 
-    --text: #e4f6ef;
-    --muted: #a6c7bc;
+    --text: #e8eef0;
+    --muted: #9aaab0;
 
-    --accent: #b9a6ee;
-    --accent-ink: #0c2621;
-    --accent-soft: #203234;
+    --accent: #de88f2;
+    --accent-ink: #1e0526;
+    --accent-soft: #2a1a31;
 
-    --border: #5d8277;
-    --hairline: rgba(228, 246, 239, 0.12);
-    --hairline-strong: rgba(228, 246, 239, 0.26);
+    --border: #62747a;
+    --hairline: rgba(232, 238, 240, 0.12);
+    --hairline-strong: rgba(232, 238, 240, 0.26);
 
-    --ok: #6fd08f;
-    --warn: #e9b84f;
-    --danger: #ff8f9b;
-    --danger-soft: #3a1a1f;
+    --ok: #6fd08c;
+    --warn: #f0b44c;
+    --danger: #ff7b84;
+    --danger-soft: #3a1b1f;
 
-    --series-1: #8c76d0;
-    --series-2: #c96c36;
-    --series-3: #3a8fc6;
-    --series-other: #71857e;
-    --crosshair: #e4f6ef;
+    --series-1: #5c95dc;
+    --series-2: #cc7636;
+    --series-3: #3fa985;
+    --series-other: #7f8d91;
+    --crosshair: #e8eef0;
 
     --brand: var(--tenant-accent-dark, var(--accent));
     --brand-ink: var(--tenant-ink-dark, var(--accent-ink));
@@ -152,15 +153,16 @@ body {
 h1,
 h2,
 h3 {
+  text-wrap: balance;
   font-family: var(--font-heading);
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  font-weight: 650;
+  letter-spacing: 0;
   line-height: 1.2;
   margin: 0;
 }
 
 h1 {
-  font-size: 1.5rem;
+  font-size: 1.85rem;
 }
 
 h2 {
@@ -173,6 +175,7 @@ h3 {
 
 p {
   margin: 0;
+  text-wrap: pretty;
 }
 
 a {
@@ -298,6 +301,10 @@ kbd {
 .field {
   display: grid;
   gap: 0.3rem;
+  /* A flex child defaults to min-width: auto, so a <select> sized to its
+     longest option pushed the invite form 160px past a phone screen. */
+  min-width: 0;
+  max-width: 100%;
 }
 
 .field-label {
@@ -312,6 +319,8 @@ kbd {
 
 .field-input,
 .field-select {
+  min-width: 0;
+  max-width: 100%;
   min-height: 2.25rem;
   padding: 0 0.65rem;
   border: 1px solid var(--border);
@@ -399,8 +408,9 @@ kbd {
   align-items: center;
   gap: 0.5rem;
   font-family: var(--font-heading);
+  font-size: 1.15rem;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
   color: var(--text);
   text-decoration: none;
 }
@@ -824,8 +834,9 @@ kbd {
 
 .lane-title {
   font-family: var(--font-heading);
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 1.2rem;
+  font-weight: 650;
+  line-height: 1.15;
 }
 
 .lane-sentence {
@@ -948,13 +959,25 @@ kbd {
   fill: none;
 }
 
-/* A number lane: the hero value, and its sparkline in the plot. */
+/* A number lane: the figure on its own row, the sparkline in the space below
+   it. Stacked, never overlaid: a peak drawn through the digits made both
+   unreadable. */
+.lane-plot[data-viz='number'] {
+  display: flex;
+  flex-direction: column;
+}
+
 .lane-figure {
-  position: absolute;
-  inset: 0.5rem auto auto 0.85rem;
   display: grid;
   gap: 0.1rem;
+  padding: 0.5rem 0.85rem 0.35rem;
   pointer-events: none;
+}
+
+.number-spark {
+  flex: 1;
+  min-height: 0;
+  height: auto;
 }
 
 .lane-figure strong {
@@ -1256,6 +1279,239 @@ kbd {
 
 /* --- narrow screens ------------------------------------------------------------------ */
 
+/* --- the roll call ---------------------------------------------------------- */
+
+/* The first band on a dashboard: each lane answers before any chart is read.
+   Glyph + word always; the accent marks a lane that MOVED (up or down), never
+   "good" or "bad", which only the reader knows for their own metric. */
+.rollcall {
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.rollcall-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.rollcall-title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.rollcall-summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.rollcall-summary strong {
+  color: var(--text);
+}
+
+.rollcall-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rollcall-list li {
+  border-right: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.rollcall-entry {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.85rem;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.rollcall-entry:hover {
+  background: var(--surface-2);
+}
+
+.rollcall-entry[data-verdict='up'],
+.rollcall-entry[data-verdict='down'] {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.rollcall-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.875rem;
+}
+
+.verdict {
+  font-family: var(--font-heading);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.verdict[data-verdict='up'],
+.verdict[data-verdict='down'] {
+  color: var(--accent);
+}
+
+.lane-verdict {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0.35rem 0 0;
+}
+
+.lane-verdict-detail {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+[id^='row-'] {
+  scroll-margin-top: 1rem;
+}
+
+/* --- the lane menu ------------------------------------------------------------ */
+
+.lane-menu {
+  position: relative;
+}
+
+.lane-menu summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.lane-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.lane-menu summary::after {
+  content: ' ▾';
+}
+
+.lane-menu-body {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  min-width: 13rem;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 2rem;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.menu-item:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.menu-item-danger {
+  color: var(--danger);
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 0.3rem 0;
+  background: var(--hairline-strong);
+}
+
+.menu-confirm {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+}
+
+.menu-confirm-text {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.button-danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--surface);
+}
+
+.button-danger-solid:hover {
+  background: var(--danger);
+  color: var(--surface);
+  filter: brightness(0.92);
+}
+
+/* --- branding: the refusal as a table ------------------------------------------ */
+
+.accent-refusal {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.pair-table td,
+.pair-table th {
+  vertical-align: middle;
+}
+
+.pair-table tr[data-pass='false'] th {
+  color: var(--danger);
+}
+
+.pair-sample {
+  display: inline-grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 1.6rem;
+  vertical-align: middle;
+  border: 1px solid var(--hairline-strong);
+}
+
+.pair-sample > span {
+  width: 1.3rem;
+  height: 0.45rem;
+}
+
+.notice {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  max-width: 44rem;
+}
+
 @media (max-width: 760px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);
@@ -1304,10 +1560,64 @@ kbd {
   .lane-readout {
     grid-auto-flow: row;
   }
+
+  /* Tables of people stack: one block per row, each cell under its label. */
+  .table-stack thead {
+    display: none;
+  }
+
+  .table-stack tr {
+    display: grid;
+    gap: 0.35rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .table-stack td {
+    display: grid;
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .table-stack td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: 0.8125rem;
+  }
+
+  .lane-menu-body {
+    left: auto;
+    right: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
   }
+}
+
+/* The chip inside a button ("Use #6f5c13") is a marker beside the label, not a block. */
+.button .swatch-chip {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: none;
+}
+
+/* The browser's default placeholder grey reached 3.2:1 on these inputs (found
+   by impeccable's detector; axe does not check placeholders). The muted ink
+   clears AA on every background, and contrast.test.ts measures it. */
+.field-input::placeholder,
+.field-select::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+/* Prose on settings pages: about 70 characters a line, never the full column. */
+.work > p.muted,
+.page-lede {
+  max-width: 68ch;
 }

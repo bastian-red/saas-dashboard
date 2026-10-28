@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { extractTokens, resolve, stripCssComments } from './contrast';
 
 /**
- * The identity lock: mint lab paper and plum by day, forest-black and lavender
- * by night, Space Grotesk / Atkinson Hyperlegible Next / Fira Code, 5px
- * corners.
+ * The identity lock: "the go / no-go poll". Console grey and signal orchid by
+ * day, a darkened control room by night, Sofia Sans Condensed / Chivo / Chivo
+ * Mono, square corners.
  *
  * Read out of the real stylesheet and `app/layout.tsx`. A redesign that drifts
  * compiles, renders and passes every other test; changing the identity means
@@ -26,11 +26,11 @@ export const SURFACES = {
 } as const;
 
 const IDENTITY = {
-  light: { '--bg': '#e1f7f2', '--accent': '#5a4590', '--radius': '5px' },
-  dark: { '--bg': '#021409', '--accent': '#b9a6ee', '--radius': '5px' },
+  light: { '--bg': '#d0d9db', '--accent': '#86269b', '--radius': '0px' },
+  dark: { '--bg': '#050a0b', '--accent': '#de88f2', '--radius': '0px' },
 } as const;
 
-const FONTS = ['Atkinson_Hyperlegible_Next', 'Fira_Code', 'Space_Grotesk'];
+const FONTS = ['Chivo', 'Chivo_Mono', 'Sofia_Sans_Condensed'];
 
 /**
  * The faces this app loads, by the same rules `web/scripts/identity-distinct.mjs`
@@ -75,6 +75,15 @@ describe('visual identity', () => {
     }
   });
 
+  it('paints the browser chrome with the canvas in each scheme', () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const bg = resolve(SURFACES[scheme], '--bg').toLowerCase();
+      expect(layout, `${scheme} theme-color`).toContain(
+        `{ media: '(prefers-color-scheme: ${scheme})', color: '${bg}' }`,
+      );
+    }
+  });
+
   it('does not reintroduce the shared signal red or the banned generator tics', () => {
     expect([...globals.matchAll(/#ff0000|#f00\b/gi)]).toHaveLength(0);
     expect(globals).not.toMatch(/--ff-dot|--dot-grid|--font-dot/);
@@ -82,7 +91,7 @@ describe('visual identity', () => {
 });
 
 /**
- * What the rest of the portfolio already spent (001-009). The cross-repo script
+ * What the rest of the portfolio already spent (001-009, 009 as redesigned 2026-10-28). The cross-repo script
  * is the authority (and from 010 on it also checks perceptual distance); this
  * is the half a single repo can check in its own gate.
  */
@@ -106,8 +115,9 @@ const SPENT = {
     '#1b1b1d',
     '#fbf3ea',
     '#1b1714',
-    '#f6f0ee',
-    '#0e1517',
+    '#dce8f7',
+    '#0b1a35',
+    '#0b1220',
   ],
   accents: [
     '#4f46e5',
@@ -128,8 +138,8 @@ const SPENT = {
     '#b9c95a',
     '#8a5a00',
     '#e6b450',
-    '#b33a12',
-    '#ff8a5c',
+    '#b50f2b',
+    '#ff6b7d',
   ],
   faces: [
     'Fraunces',
@@ -155,11 +165,11 @@ const SPENT = {
     'Lora',
     'Hanken_Grotesk',
     'Geist_Mono',
-    'Bricolage_Grotesque',
-    'Schibsted_Grotesk',
-    'Martian_Mono',
+    'Jost',
+    'Overpass',
+    'Overpass_Mono',
   ],
-  radii: ['10px', '2px', '6px', '4px', '12px', '3px', '16px', '8px'],
+  radii: ['10px', '2px', '6px', '4px', '12px', '3px', '16px', '7px'],
 } as const;
 
 describe('no two projects share an identity', () => {

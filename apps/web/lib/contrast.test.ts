@@ -26,6 +26,8 @@ const PAIRS = [
   ['--text', '--accent-soft'], // current-page marker, notices, the key reveal
   ['--danger', '--danger-soft'], // form errors
   ['--surface', '--text'], // the crosshair's time label (inverse)
+  ['--surface', '--danger'], // the confirmed "Remove lane" button
+  ['--text', '--danger-soft'], // anything set on the error tint
 ] as const;
 
 const schemes = Object.entries(SURFACES);

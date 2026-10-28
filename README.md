@@ -13,7 +13,7 @@ service logs in as a role that owns nothing and cannot bypass it, and the tenant
 transaction. A query that forgets to filter returns this workspace's rows or none, never another's.
 Next.js 16, NestJS, Fastify, PostgreSQL 16, Redis.
 
-![The trace view, the crosshair reading every lane, the sentence editor, a branded tenant, an unreadable accent refused, plan and usage, the trace view by night](assets/demo.gif)
+![The roll call naming what moved, the crosshair reading every lane, the sentence editor, a branded tenant, an unreadable accent refused as a table, plan and usage, the dashboard by night](assets/demo.gif)
 
 ```mermaid
 flowchart LR
@@ -136,21 +136,46 @@ cannot overwrite a newer state), and **immediate** (the ingest service's key cac
 new plan's quota applies to the next batch). A canceled subscription falls back to Free;
 `past_due` keeps the paid plan through the provider's retry window.
 
-## The design: the trace viewer
+## The design: the go / no-go poll
 
-Mint lab paper and plum ink by day, forest-black and lavender by night. Space Grotesk for figures
-and headings, Atkinson Hyperlegible Next for chrome (1/l/I and 0/O never collide in a page of
-counts), Fira Code for event names and keys, 5 px corners. Borders only, no shadows: a trace view
-is read edge to edge. The three faces are self-hosted (`apps/web/app/fonts/`, SIL Open Font
-License beside each), not fetched from Google at build time: that fetch failed intermittently
-under Turbopack on CI, and a build that depends on a third party is not reproducible. An E2E spec
-asserts all three actually load and paint, because a missing font falls back silently.
+A product team opens this in the morning to ask one question: is anything wrong? The visual world
+is the control room's go / no-go poll, where every station answers for itself before anyone
+studies a display. It lends the type, the palette, the density and one signature move; the
+layout and the controls stay the standard ones.
+
+- **The roll call** is the first band on a dashboard. Every lane answers *Up*, *Down*, *Steady* or
+  *No baseline*, as a glyph and a word, and each answer jumps to its lane. A lane that moved wears
+  the accent, because "moved" is what needs a look; whether up is good news depends on the metric,
+  and only the reader knows that. The verdict compares the latest **complete** bucket (the one in
+  progress always looks low) with the same slot in earlier periods (the same hour on other days,
+  the same weekday in other weeks), with a noise band from the median absolute deviation, and the
+  lane prints both numbers and the band: *Tue, Oct 27: 102 against a typical 42; steady from 33 to
+  50*. It runs on the data the dashboard already has: a second "previous period" query would
+  double every lane's scan, and the 8-lane scale test sits at 260-286 ms of a 300 ms budget
+  (`apps/web/lib/rollcall.ts`).
+- **The lanes** still run full width on one shared, calendar-aligned time axis (midnights on 7
+  days, Mondays on 30, the 1st and 15th on 90, in the dashboard's time zone) with one crosshair
+  through all of them. Edit stays visible; moving, resizing and removing live in one labelled
+  menu, and Remove asks once more, in words. A number lane's figure sits on its own row above its
+  line.
+
+Console grey and signal orchid by day, the same room with the lights down by night, square corners
+and hairline seams. Sofia Sans Condensed for figures, verdicts and lane titles (six verdicts fit
+one line), Chivo for chrome, Chivo Mono for event names and keys. The three faces are self-hosted
+(`apps/web/app/fonts/`, SIL Open Font License beside each), not fetched from Google at build time:
+that fetch failed intermittently under Turbopack on CI. An E2E spec asserts all three load and
+paint, because a missing font falls back silently. The palette is at least ΔE 2.5 (canvas) and
+8 (accent) from every other project in the portfolio.
 
 A tenant's accent tints exactly five marks: the lane rail, primary buttons, the focus ring, the
 workspace monogram and the current-page marker. `services/branding` judges a colour against the
 product's real surfaces (light: 4.5:1 on all three backgrounds, plus its button label and tint;
-dark: a lighter step of the same hue is derived), refuses it naming each failing pair, and offers
-the nearest shade that passes. `apps/web/lib/branding.test.ts` holds both halves: the branding
+dark: a lighter step of the same hue is derived), refuses it with a table of every surface and
+its ratio, and offers the nearest shade that passes. A stored accent is **re-judged on every
+render**, because it was judged against the backgrounds of the day it was saved: when this
+redesign changed the canvas, a seeded accent that had passed at 4.5:1 reached 4.40:1, so the
+workspace now paints the nearest passing shade and tells its admin, instead of quietly breaking
+contrast. `apps/web/lib/branding.test.ts` holds both halves: the branding
 service's surfaces equal the stylesheet, and nothing but those five marks may read `--brand`.
 
 Every colour pair is checked against WCAG AA from the real stylesheet in both schemes

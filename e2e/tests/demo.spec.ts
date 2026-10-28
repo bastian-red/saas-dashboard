@@ -65,7 +65,7 @@ test('demo', async ({ page, browser }) => {
 
   await page.goto(`/w/${MAIN_SLUG}/settings/branding`);
   await page.getByTestId('accent-hex').fill('#ffd400');
-  await expect(page.getByText(/Would not be readable everywhere/u)).toBeVisible();
+  await expect(page.getByTestId('accent-refusal')).toBeVisible();
   await frame(page, '05-accent-refused');
 
   await page.goto(`/w/${MAIN_SLUG}/settings/billing`);

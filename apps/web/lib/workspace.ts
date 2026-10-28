@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { effectiveBranding } from '@saas/branding';
 import { workspaceSchema, type SessionUser, type Workspace } from '@saas/shared';
 import { notFound } from 'next/navigation';
 import { z } from 'zod';
@@ -41,18 +42,26 @@ export const wsPath = (slug: string, rest = ''): string => `/w/${slug}${rest}`;
 
 /**
  * Inline custom properties that re-point --brand at the tenant's accent. Only
- * the six `--tenant-*` names, whose values the API validated (and stepped for
- * both schemes) before storing; globals.css decides where --brand is worn.
+ * the six `--tenant-*` names; globals.css decides where --brand is worn.
+ *
+ * The stored steps are NOT painted as stored: they were judged against the
+ * backgrounds of the day they were saved, and the product's own palette can
+ * change after that. `effectiveBranding` re-judges the stored accent against
+ * today's surfaces and steps it again (or moves it to the nearest passing
+ * shade, or drops it), so a tenant colour can never cost contrast, even across
+ * a redesign (`lib/branding.test.ts`).
  */
 export function brandingStyle(workspace: Workspace): Record<string, string> | undefined {
   const b = workspace.branding;
   if (b === null) return undefined;
+  const e = effectiveBranding(b.light.accent);
+  if (e.kind === 'product') return undefined;
   return {
-    '--tenant-accent-light': b.light.accent,
-    '--tenant-ink-light': b.light.ink,
-    '--tenant-soft-light': b.light.soft,
-    '--tenant-accent-dark': b.dark.accent,
-    '--tenant-ink-dark': b.dark.ink,
-    '--tenant-soft-dark': b.dark.soft,
+    '--tenant-accent-light': e.light.accent,
+    '--tenant-ink-light': e.light.ink,
+    '--tenant-soft-light': e.light.soft,
+    '--tenant-accent-dark': e.dark.accent,
+    '--tenant-ink-dark': e.dark.ink,
+    '--tenant-soft-dark': e.dark.soft,
   };
 }

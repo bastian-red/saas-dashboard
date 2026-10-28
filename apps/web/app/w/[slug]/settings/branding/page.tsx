@@ -1,3 +1,4 @@
+import { effectiveBranding } from '@saas/branding';
 import { can } from '@saas/shared';
 import { notFound } from 'next/navigation';
 
@@ -24,12 +25,18 @@ export default async function BrandingPage({ params }: { params: Promise<{ slug:
           <h1>Branding</h1>
         </div>
       </header>
-      <p className="muted" style={{ marginBottom: '1rem', maxWidth: '44rem' }}>
-        Your accent marks the lane rail, primary buttons, the focus ring and the current page in the
-        menu. It must reach 4.5:1 against every background it can sit on, in light and dark mode;
-        the dark-mode shade is derived for you.
+      <p className="muted page-lede" style={{ marginBottom: '1rem' }}>
+        Your accent marks the lane rail, primary buttons, the focus ring, the workspace monogram and
+        the current page in the menu. It must reach 4.5:1 against every background it can sit on, in
+        light and dark mode; the dark-mode shade is derived for you.
       </p>
-      <BrandingForm slug={slug} current={workspace.branding?.light.accent ?? null} />
+      <BrandingForm
+        slug={slug}
+        current={workspace.branding?.light.accent ?? null}
+        effective={
+          workspace.branding === null ? null : effectiveBranding(workspace.branding.light.accent)
+        }
+      />
     </>
   );
 }

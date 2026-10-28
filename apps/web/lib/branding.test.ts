@@ -115,8 +115,28 @@ describe('the tenant accent reaches only the marks it was judged for', () => {
 });
 
 describe('the demo workspace accent passes the same gate', () => {
-  it('#b4235a is accepted with a derived dark step', () => {
-    const r = checkAccent('#b4235a');
-    expect(r.ok).toBe(true);
+  // Read out of the seed, so a reseeded colour cannot drift past this gate.
+  const seed = readFileSync(
+    join(__dirname, '..', '..', '..', 'packages', 'db', 'prisma', 'seed.mts'),
+    'utf8',
+  );
+  const accent = /^const SECOND_ACCENT = '(#[0-9a-f]{6})';/mu.exec(seed)?.[1];
+
+  it('the seeded accent is accepted on the current surfaces, with a derived dark step', () => {
+    expect(accent).toBeDefined();
+    expect(checkAccent(accent!).ok).toBe(true);
+  });
+});
+
+describe('stored branding is re-judged on every render', () => {
+  // A stored accent was judged against the backgrounds of the day it was saved;
+  // the product palette changed after that once already (2026-10-28). The web
+  // must paint effectiveBranding's steps, never the stored ones as-is.
+  const workspace = readFileSync(join(__dirname, 'workspace.ts'), 'utf8');
+  const body = workspace.slice(workspace.indexOf('export function brandingStyle'));
+
+  it('brandingStyle paints effectiveBranding, not the stored steps', () => {
+    expect(body).toMatch(/effectiveBranding\(b\.light\.accent\)/u);
+    expect(body).not.toMatch(/: b\.(light|dark)\./u);
   });
 });

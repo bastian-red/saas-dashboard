@@ -79,6 +79,10 @@ test('events sent with a key show up on a lane built in the sentence editor', as
   await page.waitForURL(dashboard);
   await expect(page.getByTestId('lane').locator('.lane-figure strong')).toHaveText('5');
 
-  await page.getByRole('button', { name: 'Remove Trials by plan' }).click();
+  // Remove is two deliberate steps: open the lane's menu, ask to remove, then confirm.
+  await lane.getByText('More', { exact: true }).click();
+  await lane.getByRole('button', { name: 'Remove Trials by plan…' }).click();
+  await expect(lane.getByText(/Remove Trials by plan from this dashboard\?/u)).toBeVisible();
+  await page.getByRole('button', { name: 'Remove Trials by plan', exact: true }).click();
   await expect(page.getByText('This dashboard has no lanes yet.')).toBeVisible();
 });
