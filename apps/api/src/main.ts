@@ -37,9 +37,10 @@ async function main(): Promise<void> {
   app.useBodyParser('json', { limit: JSON_BODY_LIMIT_BYTES });
 
   // Anonymous budgets key on the client address, which the web app forwards in
-  // `x-forwarded-for`. One hop is trusted -- the web server -- and not more:
-  // trusting every hop means trusting a header the browser can set.
-  app.set('trust proxy', 1);
+  // `x-forwarded-for`. Locally one hop is trusted -- the web server -- and not
+  // more: trusting every hop means trusting a header the browser can set. A host
+  // whose proxy appends another entry sets TRUST_PROXY_HOPS (config.ts says how).
+  app.set('trust proxy', config.trustProxyHops);
 
   // Nest's default is to keep the process alive on SIGTERM. Enabling this is what
   // makes `PrismaService.onModuleDestroy` and `RedisService.onModuleDestroy` run,

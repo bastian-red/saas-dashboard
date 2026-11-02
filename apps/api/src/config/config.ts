@@ -64,6 +64,15 @@ export interface ApiConfig {
   rateLimitGlobal: number;
   rateLimitAuth: number;
   rateLimitInvite: number;
+  /**
+   * Proxies in front of this API whose `x-forwarded-for` entries are trusted.
+   * Locally the web server is the only hop (1). On a host whose own proxy
+   * appends the web server's address, the browser's address sits one entry
+   * further left, so the count is that host's hops plus one; trusting fewer
+   * makes every visitor share the web server's anonymous budgets, trusting more
+   * lets a caller pick its own address.
+   */
+  trustProxyHops: number;
   billingDriver: string;
   stripeSecretKey: string;
   stripeWebhookSecret: string;
@@ -92,6 +101,7 @@ const ENV_NAMES: Record<string, string> = {
   rateLimitGlobal: 'RATE_LIMIT_GLOBAL',
   rateLimitAuth: 'RATE_LIMIT_AUTH',
   rateLimitInvite: 'RATE_LIMIT_INVITE',
+  trustProxyHops: 'TRUST_PROXY_HOPS',
   billingDriver: 'BILLING_DRIVER',
   stripeSecretKey: 'STRIPE_SECRET_KEY',
   stripeWebhookSecret: 'STRIPE_WEBHOOK_SECRET',
@@ -126,6 +136,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     rateLimitGlobal: positiveInt,
     rateLimitAuth: positiveInt,
     rateLimitInvite: positiveInt,
+    trustProxyHops: positiveInt.pipe(z.number().max(5, 'more than 5 hops is a misconfiguration')),
     billingDriver: z.enum(['stripe', 'mock']),
     stripeSecretKey: z.string().default(''),
     stripeWebhookSecret: z.string().default(''),
@@ -146,6 +157,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     rateLimitGlobal: env.RATE_LIMIT_GLOBAL,
     rateLimitAuth: env.RATE_LIMIT_AUTH,
     rateLimitInvite: env.RATE_LIMIT_INVITE,
+    trustProxyHops: blankToUndefined(env.TRUST_PROXY_HOPS) ?? '1',
     billingDriver: blankToUndefined(env.BILLING_DRIVER) ?? 'mock',
     stripeSecretKey: env.STRIPE_SECRET_KEY?.trim() ?? '',
     stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() ?? '',

@@ -36,6 +36,16 @@ describe('loadConfig', () => {
     expect(loadConfig(env({ PORT: '' })).port).toBe(4000);
   });
 
+  it('trusts one proxy hop unless TRUST_PROXY_HOPS says otherwise', () => {
+    expect(loadConfig(env()).trustProxyHops).toBe(1);
+    expect(loadConfig(env({ TRUST_PROXY_HOPS: '' })).trustProxyHops).toBe(1);
+    expect(loadConfig(env({ TRUST_PROXY_HOPS: '2' })).trustProxyHops).toBe(2);
+  });
+
+  it.each(['0', '-1', '1.5', 'true', '6'])('refuses TRUST_PROXY_HOPS=%s', (value) => {
+    expect(() => loadConfig(env({ TRUST_PROXY_HOPS: value }))).toThrow(/TRUST_PROXY_HOPS/u);
+  });
+
   it('names every missing variable in one message', () => {
     expect(() => loadConfig(env({ DATABASE_URL: undefined, AUTH_SECRET: undefined }))).toThrow(
       /DATABASE_URL[\s\S]*AUTH_SECRET/u,

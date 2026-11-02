@@ -41,6 +41,7 @@
     "SEED_API_KEY",
     "STRIPE_SECRET_KEY",
     "STRIPE_WEBHOOK_SECRET",
+    "TRUST_PROXY_HOPS",
     "WEB_PORT"
   ],
 
