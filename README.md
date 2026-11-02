@@ -266,6 +266,8 @@ and builds all four Docker images.
 
 The same code, configured for free tiers. Nothing in it is demo-only except the three settings
 named below, and each one is off by default.
+Every push to `main` redeploys all four pieces: Vercel through its GitHub app, Render through
+its own auto-deploy on commit.
 
 | Piece                                                | Where                                                                          | Notes                                                                                      |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
