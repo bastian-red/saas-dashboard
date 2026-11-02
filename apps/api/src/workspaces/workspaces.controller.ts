@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Inject,
   Param,
   Patch,
   Post,
@@ -14,6 +15,7 @@ import {
   createApiKeySchema,
   createInviteSchema,
   createWorkspaceSchema,
+  DomainError,
   type ApiKey,
   type Invite,
   type Member,
@@ -25,6 +27,7 @@ import { z } from 'zod';
 import { CurrentUser } from '../common/session.guard';
 import { Budget } from '../common/throttle';
 import { ZodPipe } from '../common/zod.pipe';
+import { API_CONFIG, type ApiConfig } from '../config/config';
 import { Requires, Tenant, type TenantContext } from '../tenancy/tenant.guard';
 import { workspaceOf, WorkspacesService } from './workspaces.service';
 
@@ -34,6 +37,22 @@ const idParam = z
   .max(40)
   .regex(/^[a-z0-9]+$/u);
 const acceptSchema = z.object({ token: z.string().min(10).max(200) }).strict();
+
+/**
+ * The hosted demo's shared read-only login stays in its workspace: one visitor
+ * leaving would hand every later visitor an empty account. Locally the list is
+ * empty and every member may leave. Checked against the verified session's
+ * email, so no request field can opt out.
+ */
+export function assertMayLeave(user: Pick<SessionUser, 'email'>, pinned: readonly string[]): void {
+  if (pinned.includes(user.email.toLowerCase())) {
+    throw new DomainError(
+      'FORBIDDEN',
+      'This is the shared demo login, so it stays in this workspace for the next visitor. ' +
+        'Create your own account to try leaving a workspace.',
+    );
+  }
+}
 
 /** Routes with no workspace yet: the switcher, creating one, accepting an invite. */
 @Controller('workspaces')
@@ -65,7 +84,10 @@ export class WorkspacesController {
 
 @Controller('workspaces/:workspace')
 export class WorkspaceController {
-  constructor(private readonly workspaces: WorkspacesService) {}
+  constructor(
+    private readonly workspaces: WorkspacesService,
+    @Inject(API_CONFIG) private readonly config: ApiConfig,
+  ) {}
 
   @Requires('dashboard.read')
   @Get()
@@ -119,6 +141,7 @@ export class WorkspaceController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @Delete('membership')
   leave(@Tenant() ctx: TenantContext, @CurrentUser() user: SessionUser): Promise<void> {
+    assertMayLeave(user, this.config.demoPinnedUsers);
     return this.workspaces.removeMember(ctx, user, user.id);
   }
 

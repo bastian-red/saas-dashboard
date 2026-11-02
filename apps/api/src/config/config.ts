@@ -71,8 +71,19 @@ export interface ApiConfig {
    * further left, so the count is that host's hops plus one; trusting fewer
    * makes every visitor share the web server's anonymous budgets, trusting more
    * lets a caller pick its own address.
+   *
+   * Measured on Render (2026-11-02): its edge appends two entries after the
+   * caller's, so the web server's forwarded browser address is 4 from the right.
+   * At 3 every visitor behind one web server instance shared a budget; at 4 a
+   * repeated address is cut off after RATE_LIMIT_AUTH and distinct ones are not.
    */
   trustProxyHops: number;
+  /**
+   * Accounts that may not leave a workspace: the hosted demo publishes one
+   * read-only login, and if one visitor made it leave, the next visitor's
+   * sign-in would land in an empty account. Lowercased emails; empty locally.
+   */
+  demoPinnedUsers: readonly string[];
   billingDriver: string;
   stripeSecretKey: string;
   stripeWebhookSecret: string;
@@ -102,6 +113,7 @@ const ENV_NAMES: Record<string, string> = {
   rateLimitAuth: 'RATE_LIMIT_AUTH',
   rateLimitInvite: 'RATE_LIMIT_INVITE',
   trustProxyHops: 'TRUST_PROXY_HOPS',
+  demoPinnedUsers: 'DEMO_PINNED_USERS',
   billingDriver: 'BILLING_DRIVER',
   stripeSecretKey: 'STRIPE_SECRET_KEY',
   stripeWebhookSecret: 'STRIPE_WEBHOOK_SECRET',
@@ -137,6 +149,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     rateLimitAuth: positiveInt,
     rateLimitInvite: positiveInt,
     trustProxyHops: positiveInt.pipe(z.number().max(5, 'more than 5 hops is a misconfiguration')),
+    demoPinnedUsers: z
+      .string()
+      .transform((v) =>
+        v
+          .split(',')
+          .map((e) => e.trim().toLowerCase())
+          .filter((e) => e !== ''),
+      )
+      .pipe(z.array(z.string().email('must be a comma-separated list of emails'))),
     billingDriver: z.enum(['stripe', 'mock']),
     stripeSecretKey: z.string().default(''),
     stripeWebhookSecret: z.string().default(''),
@@ -158,6 +179,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     rateLimitAuth: env.RATE_LIMIT_AUTH,
     rateLimitInvite: env.RATE_LIMIT_INVITE,
     trustProxyHops: blankToUndefined(env.TRUST_PROXY_HOPS) ?? '1',
+    demoPinnedUsers: env.DEMO_PINNED_USERS ?? '',
     billingDriver: blankToUndefined(env.BILLING_DRIVER) ?? 'mock',
     stripeSecretKey: env.STRIPE_SECRET_KEY?.trim() ?? '',
     stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET?.trim() ?? '',
@@ -169,7 +191,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     // discover five missing variables is the common experience on a fresh clone,
     // and it is the one this avoids.
     const lines = parsed.error.issues.map(
-      (issue) => `  ${ENV_NAMES[issue.path.join('.')] ?? issue.path.join('.')}: ${issue.message}`,
+      (issue) => `  ${ENV_NAMES[String(issue.path[0])] ?? issue.path.join('.')}: ${issue.message}`,
     );
     throw new ConfigError(`Cannot start the API. Fix these in .env:\n${lines.join('\n')}`);
   }

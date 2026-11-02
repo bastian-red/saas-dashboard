@@ -13,6 +13,12 @@ service logs in as a role that owns nothing and cannot bypass it, and the tenant
 transaction. A query that forgets to filter returns this workspace's rows or none, never another's.
 Next.js 16, NestJS, Fastify, PostgreSQL 16, Redis.
 
+**Live demo: https://saas-dashboard-lac-five.vercel.app**. Sign in with the read-only login
+`rui@fieldnote.test` / `viewer-password-2026`, or create an account to own a workspace. The
+services run on free tiers that sleep: the first page after a quiet spell can take up to a
+minute, and `/status` may report a service as unreachable until it wakes. See
+[Hosted demo](#hosted-demo).
+
 ![The roll call naming what moved, the crosshair reading every lane, the sentence editor, a branded tenant, an unreadable accent refused as a table, plan and usage, the dashboard by night](assets/demo.gif)
 
 ```mermaid
@@ -67,14 +73,14 @@ writes a query in a hurry. Here the database refuses instead:
 
 ### Proven, not asserted
 
-| What | Test | Shape |
-|---|---|---|
-| Every table is classified: tenant (RLS + FORCE + policy) or deliberately global | `packages/db/src/tenancy.test.ts` (gate), `apps/api/test/isolation.test.ts` §1 (live catalog) | a new table with a `tenant_id` and no policy fails the commit |
-| Raw SQL as `saas_app` with tenant A set returns zero rows of B, for every table; with no tenant set, zero rows | `isolation.test.ts` §2 | each table seeded for two tenants |
-| Every workspace route answers **404** to a member of another workspace, with this workspace's real ids | `isolation.test.ts` §3 | 28 routes discovered from the running Nest app, not listed by hand |
-| Every role gets **403** exactly where the role matrix says no | `isolation.test.ts` §3 | 4 roles x 28 routes |
-| The API refuses to boot if a workspace route has no `@Requires` | `tenancy/route-audit.ts` | boot-time audit |
-| In the browser, another workspace is "Nothing here" on every page | `e2e/tests/tenancy.spec.ts` | Chromium and Firefox |
+| What                                                                                                           | Test                                                                                          | Shape                                                              |
+| -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Every table is classified: tenant (RLS + FORCE + policy) or deliberately global                                | `packages/db/src/tenancy.test.ts` (gate), `apps/api/test/isolation.test.ts` §1 (live catalog) | a new table with a `tenant_id` and no policy fails the commit      |
+| Raw SQL as `saas_app` with tenant A set returns zero rows of B, for every table; with no tenant set, zero rows | `isolation.test.ts` §2                                                                        | each table seeded for two tenants                                  |
+| Every workspace route answers **404** to a member of another workspace, with this workspace's real ids         | `isolation.test.ts` §3                                                                        | 28 routes discovered from the running Nest app, not listed by hand |
+| Every role gets **403** exactly where the role matrix says no                                                  | `isolation.test.ts` §3                                                                        | 4 roles x 28 routes                                                |
+| The API refuses to boot if a workspace route has no `@Requires`                                                | `tenancy/route-audit.ts`                                                                      | boot-time audit                                                    |
+| In the browser, another workspace is "Nothing here" on every page                                              | `e2e/tests/tenancy.spec.ts`                                                                   | Chromium and Firefox                                               |
 
 Each of these was proven able to fail: the policy, the guard and the foreign key were removed in
 turn, the test went red, and the fix was restored. Doing that for the foreign key found its test
@@ -96,15 +102,15 @@ stored once and its quota refunded.
 on the same machine). Open-loop: requests leave on schedule whether or not earlier ones answered,
 so a slow server shows up as latency instead of quietly lowering the offered rate.
 
-| | Result | Budget |
-|---|---|---|
-| Throughput, 4 Business workspaces x 500 events/s for 20 s | 2,003 events/s, 40,000 of 40,000 accepted | 2,000/s |
-| Accept latency (25-event batches) | p50 19.1 ms, p99 38.7 ms | p99 < 50 ms |
-| Stored rows vs accepted events, per workspace | equal; 0 lost | 0 |
-| Quiet workspace p99, alone vs beside a Free workspace flooding at 10x its rate (720 samples each) | 16.7 ms vs 13.6 ms; flood: 67 of 96 batches refused | within 20% |
+|                                                                                                   | Result                                              | Budget      |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ----------- |
+| Throughput, 4 Business workspaces x 500 events/s for 20 s                                         | 2,003 events/s, 40,000 of 40,000 accepted           | 2,000/s     |
+| Accept latency (25-event batches)                                                                 | p50 19.1 ms, p99 38.7 ms                            | p99 < 50 ms |
+| Stored rows vs accepted events, per workspace                                                     | equal; 0 lost                                       | 0           |
+| Quiet workspace p99, alone vs beside a Free workspace flooding at 10x its rate (720 samples each) | 16.7 ms vs 13.6 ms; flood: 67 of 96 batches refused | within 20%  |
 
 The load lane found two real bugs on its first run, and both are now held by tests: the rate limit
-charged per *request* (a Free workspace could send 10,000 events/s), and a 50 ms flush timer put a
+charged per _request_ (a Free workspace could send 10,000 events/s), and a 50 ms flush timer put a
 50 ms floor under every request (p50 was 72 ms).
 
 ## Dashboards: lanes on one time axis
@@ -143,14 +149,14 @@ is the control room's go / no-go poll, where every station answers for itself be
 studies a display. It lends the type, the palette, the density and one signature move; the
 layout and the controls stay the standard ones.
 
-- **The roll call** is the first band on a dashboard. Every lane answers *Up*, *Down*, *Steady* or
-  *No baseline*, as a glyph and a word, and each answer jumps to its lane. A lane that moved wears
+- **The roll call** is the first band on a dashboard. Every lane answers _Up_, _Down_, _Steady_ or
+  _No baseline_, as a glyph and a word, and each answer jumps to its lane. A lane that moved wears
   the accent, because "moved" is what needs a look; whether up is good news depends on the metric,
   and only the reader knows that. The verdict compares the latest **complete** bucket (the one in
   progress always looks low) with the same slot in earlier periods (the same hour on other days,
   the same weekday in other weeks), with a noise band from the median absolute deviation, and the
-  lane prints both numbers and the band: *Tue, Oct 27: 102 against a typical 42; steady from 33 to
-  50*. It runs on the data the dashboard already has: a second "previous period" query would
+  lane prints both numbers and the band: _Tue, Oct 27: 102 against a typical 42; steady from 33 to
+  50_. It runs on the data the dashboard already has: a second "previous period" query would
   double every lane's scan, and the 8-lane scale test sits at 260-286 ms of a 300 ms budget
   (`apps/web/lib/rollcall.ts`).
 - **The lanes** still run full width on one shared, calendar-aligned time axis (midnights on 7
@@ -202,7 +208,8 @@ pnpm db:seed                                       # 2 workspaces, 3 people, ~82
 pnpm dev    # web :3000, api :4000, ingest :4200, aggregator :4300
 ```
 
-Open http://localhost:3000 and sign in as `sam@fieldnote.test` / `demo-password-2026` (owner of
+Open http://localhost:3000 and sign in as `sam@fieldnote.test` / `demo-password-2026` (local
+databases only; owner of
 Fieldnote, analyst in the branded Harbor Labs). `rui@fieldnote.test` / `viewer-password-2026` is a
 viewer; `jo@harbor.test` / `outsider-password-2026` belongs to Harbor Labs only.
 
@@ -230,16 +237,16 @@ four processes with no configuration.
 
 ## Testing
 
-| Lane | Command | Count | What it needs |
-|---|---|---|---|
-| Gate (pre-commit) | `pnpm test` | 385 tests | nothing; seconds |
-| Environment contract | `pnpm env:contract` | source, `.env.example`, `turbo.json` agree | nothing |
-| Integration | `./scripts/integration.sh` | 49 tests | Postgres, Redis; runs as `saas_app` |
-| Ingest load | `./scripts/loadtest.sh` | 2 measurements | Postgres, Redis |
-| Seed determinism + recount | `pnpm db:seed:check` | 2 workspaces | a database |
-| Dev smoke | `./scripts/dev-smoke.sh` | the documented `pnpm dev`, env stripped | datastores up |
-| E2E + accessibility | `./scripts/e2e.sh` | 74 tests (37 x Chromium, Firefox) | datastores up |
-| Demo GIF | `./scripts/demo-gif.sh` | 7 frames | ffmpeg, ImageMagick |
+| Lane                       | Command                    | Count                                      | What it needs                       |
+| -------------------------- | -------------------------- | ------------------------------------------ | ----------------------------------- |
+| Gate (pre-commit)          | `pnpm test`                | 385 tests                                  | nothing; seconds                    |
+| Environment contract       | `pnpm env:contract`        | source, `.env.example`, `turbo.json` agree | nothing                             |
+| Integration                | `./scripts/integration.sh` | 49 tests                                   | Postgres, Redis; runs as `saas_app` |
+| Ingest load                | `./scripts/loadtest.sh`    | 2 measurements                             | Postgres, Redis                     |
+| Seed determinism + recount | `pnpm db:seed:check`       | 2 workspaces                               | a database                          |
+| Dev smoke                  | `./scripts/dev-smoke.sh`   | the documented `pnpm dev`, env stripped    | datastores up                       |
+| E2E + accessibility        | `./scripts/e2e.sh`         | 74 tests (37 x Chromium, Firefox)          | datastores up                       |
+| Demo GIF                   | `./scripts/demo-gif.sh`    | 7 frames                                   | ffmpeg, ImageMagick                 |
 
 The integration and load lanes use their own databases (`saas_it`, `saas_load`) and Redis indexes.
 Every lane runs at the **documented** budgets: the E2E browsers each come from their own address,
@@ -254,6 +261,39 @@ dev-smoke's dependence on `scripts/dev.sh`.
 The pre-commit hook runs gitleaks, the environment contract, the invisible-character scan and the
 gate lane. CI runs every lane on every push, audits runtime dependencies for critical advisories,
 and builds all four Docker images.
+
+## Hosted demo
+
+The same code, configured for free tiers. Nothing in it is demo-only except the three settings
+named below, and each one is off by default.
+
+| Piece                                                | Where                                                                          | Notes                                                                                      |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `apps/web`                                           | Vercel Hobby                                                                   | `rootDirectory: apps/web`, built with `turbo run build --filter=@saas/web`                 |
+| `apps/api`, `services/ingest`, `services/aggregator` | Render free web services (Ohio), from `infra/Dockerfile.*`                     | sleep after 15 idle minutes; `/health` on each                                             |
+| PostgreSQL 16                                        | Neon free (us-east-2), pooled endpoint for the services, direct for migrations | `saas_app` verified on Neon: `NOBYPASSRLS`, 18 tables `FORCE`d, zero rows without a tenant |
+| Redis                                                | Upstash free (us-east-2), TLS                                                  |                                                                                            |
+
+What a public deployment changes, and the mechanism that holds each:
+
+- **No published credential works there.** The ingest key and the owners' passwords in
+  `prisma/seed.mts` are for a local database. On any other host the seed refuses to run without
+  `SEED_API_KEY` and `SEED_OWNER_PASSWORD` (`packages/db/src/seed-key.ts`, unit-tested), so the
+  hosted owners have a secret password and the published key authenticates nothing. Only the
+  read-only viewer keeps its published password: that is the login the sign-in page prints, and an
+  E2E test pins it to the viewer.
+- **The shared login cannot be stranded.** `DEMO_PINNED_USERS=rui@fieldnote.test` on the API
+  refuses `DELETE /workspaces/:slug/membership` for that account with a sentence saying why, so
+  one visitor cannot leave the next with an empty account (`apps/api/test/demo-pin.test.ts`).
+- **Every visitor has their own sign-in budget.** Render's edge appends two `x-forwarded-for`
+  entries after the caller, so the browser address the web server forwards is four from the right:
+  `TRUST_PROXY_HOPS=4`. Measured on the live API, not assumed: at 3, distinct forged addresses
+  all drew on one budget (the caller's); at 4, a repeated address is refused on its sixth try and
+  distinct ones are not. The cost: a caller who reaches the API directly can choose its own
+  anonymous address.
+- **The data stays current.** The seed anchors 90 days of events to the hour it runs, so
+  `.github/workflows/demo-reseed.yml` applies migrations and reseeds every Monday (about 18
+  minutes on Neon free, most of it the aggregator's own rollup code).
 
 ## Configuration
 

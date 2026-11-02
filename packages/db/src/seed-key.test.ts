@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isLocalDatabase, seedApiKey } from './seed-key';
+import { isLocalDatabase, seedApiKey, seedOwnerPassword } from './seed-key';
 
 const PUBLISHED = 'sk_demo_fieldnote_local_dev_only_0000';
 const LOCAL = 'postgresql://saas_app:pw@localhost:5443/saas?schema=public';
@@ -61,5 +61,44 @@ describe('seedApiKey', () => {
         /at least 29/u,
       );
     }
+  });
+});
+
+describe('seedOwnerPassword', () => {
+  const PUBLISHED_PW = ['demo-password-2026', 'outsider-password-2026'];
+  const STRONG = 'k3Vq9-hosted-owner-pw-0001';
+
+  it('keeps the published passwords on a local database when nothing is set', () => {
+    expect(seedOwnerPassword({ DATABASE_URL: LOCAL }, PUBLISHED_PW)).toBeNull();
+    expect(
+      seedOwnerPassword({ DATABASE_URL: LOCAL, SEED_OWNER_PASSWORD: ' ' }, PUBLISHED_PW),
+    ).toBeNull();
+  });
+
+  it('refuses a hosted database without SEED_OWNER_PASSWORD, naming the host and the fix', () => {
+    expect(() => seedOwnerPassword({ DATABASE_URL: HOSTED }, PUBLISHED_PW)).toThrow(
+      /ep-x-pooler\.us-east-2\.aws\.neon\.tech.*SEED_OWNER_PASSWORD/u,
+    );
+  });
+
+  it('uses SEED_OWNER_PASSWORD wherever it is set', () => {
+    expect(
+      seedOwnerPassword({ DATABASE_URL: HOSTED, SEED_OWNER_PASSWORD: STRONG }, PUBLISHED_PW),
+    ).toBe(STRONG);
+    expect(
+      seedOwnerPassword({ DATABASE_URL: LOCAL, SEED_OWNER_PASSWORD: STRONG }, PUBLISHED_PW),
+    ).toBe(STRONG);
+  });
+
+  it.each(PUBLISHED_PW)('refuses the published password %s passed back in', (pw) => {
+    expect(() =>
+      seedOwnerPassword({ DATABASE_URL: HOSTED, SEED_OWNER_PASSWORD: pw }, PUBLISHED_PW),
+    ).toThrow(/published/u);
+  });
+
+  it.each(['short-pw-15char', ` ${'x'.repeat(20)}`])('refuses %j', (pw) => {
+    expect(() =>
+      seedOwnerPassword({ DATABASE_URL: HOSTED, SEED_OWNER_PASSWORD: pw }, PUBLISHED_PW),
+    ).toThrow(/at least 16/u);
   });
 });

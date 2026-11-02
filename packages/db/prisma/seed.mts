@@ -27,7 +27,10 @@
  *
  * DEMO_API_KEY is a local development key for a local database, published on
  * purpose so `scripts/dev-smoke.sh` and the README's curl example work on a
- * fresh clone. It authenticates nothing anywhere else.
+ * fresh clone. It authenticates nothing anywhere else. The same goes for the
+ * owners' passwords: on any database that is not this machine the seed refuses
+ * to run without SEED_API_KEY and SEED_OWNER_PASSWORD (`src/seed-key.ts`), and
+ * only the read-only viewer keeps its published password.
  */
 import pg from 'pg';
 
@@ -37,7 +40,7 @@ import { BatchWriter, hashKey, userHash, type Row } from '@saas/ingest';
 import { laneSpecSchema, type LaneSpec } from '@saas/shared';
 import { hashPassword } from '@saas/shared/server';
 
-import { seedApiKey, type SeedKey } from '../src/seed-key.js';
+import { seedApiKey, seedOwnerPassword, type SeedKey } from '../src/seed-key.js';
 
 const DEMO_EMAIL = 'sam@fieldnote.test';
 const DEMO_PASSWORD = 'demo-password-2026';
@@ -483,6 +486,14 @@ async function main(): Promise<void> {
     { SEED_API_KEY: process.env.SEED_API_KEY, DATABASE_URL: databaseUrl },
     DEMO_API_KEY,
   );
+  // The two owners get a secret password on a hosted database; the read-only
+  // viewer keeps its published one, which is the login the demo prints.
+  const ownerPassword = seedOwnerPassword(
+    { SEED_OWNER_PASSWORD: process.env.SEED_OWNER_PASSWORD, DATABASE_URL: databaseUrl },
+    [DEMO_PASSWORD, OUTSIDER_PASSWORD],
+  );
+  const passwordOf = (u: (typeof USERS)[number]): string =>
+    u.email === VIEWER_EMAIL ? u.password : (ownerPassword ?? u.password);
 
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 3 });
   try {
@@ -496,7 +507,7 @@ async function main(): Promise<void> {
             u.id,
             u.email,
             u.name,
-            hashPassword(u.password),
+            hashPassword(passwordOf(u)),
             new Date(ANCHOR.getTime() - DAYS * DAY),
           ],
         );

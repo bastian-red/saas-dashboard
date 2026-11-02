@@ -46,6 +46,18 @@ describe('loadConfig', () => {
     expect(() => loadConfig(env({ TRUST_PROXY_HOPS: value }))).toThrow(/TRUST_PROXY_HOPS/u);
   });
 
+  it('pins no account unless DEMO_PINNED_USERS lists some, lowercased and trimmed', () => {
+    expect(loadConfig(env()).demoPinnedUsers).toEqual([]);
+    expect(loadConfig(env({ DEMO_PINNED_USERS: '' })).demoPinnedUsers).toEqual([]);
+    expect(
+      loadConfig(env({ DEMO_PINNED_USERS: ' Rui@Fieldnote.test , ,b@x.test' })).demoPinnedUsers,
+    ).toEqual(['rui@fieldnote.test', 'b@x.test']);
+  });
+
+  it.each(['rui', 'a@x.test;b@x.test'])('refuses DEMO_PINNED_USERS=%s', (value) => {
+    expect(() => loadConfig(env({ DEMO_PINNED_USERS: value }))).toThrow(/DEMO_PINNED_USERS/u);
+  });
+
   it('names every missing variable in one message', () => {
     expect(() => loadConfig(env({ DATABASE_URL: undefined, AUTH_SECRET: undefined }))).toThrow(
       /DATABASE_URL[\s\S]*AUTH_SECRET/u,

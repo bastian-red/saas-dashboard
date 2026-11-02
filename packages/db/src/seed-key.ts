@@ -49,3 +49,39 @@ export function seedApiKey(
   }
   return { key: chosen, name: 'Demo key' };
 }
+
+/**
+ * The password the seed gives the accounts that OWN a workspace.
+ *
+ * Same rule, same reason as the key: the repo publishes the owners' passwords so
+ * a fresh clone signs straight in, and on a hosted demo those would let any
+ * reader delete the workspace, rotate its key or remove its members. The
+ * read-only viewer keeps its published password everywhere; that login is the
+ * one the hosted sign-in page prints.
+ *
+ * `null` means "use each account's published password" (local only).
+ */
+export function seedOwnerPassword(
+  env: { SEED_OWNER_PASSWORD?: string | undefined; DATABASE_URL: string },
+  publishedPasswords: readonly string[],
+): string | null {
+  const chosen = env.SEED_OWNER_PASSWORD ?? '';
+  if (chosen.trim() === '') {
+    if (!isLocalDatabase(env.DATABASE_URL)) {
+      throw new Error(
+        `seed: DATABASE_URL points at ${new URL(env.DATABASE_URL).hostname}, not this machine. ` +
+          'Set SEED_OWNER_PASSWORD so the published owner passwords never reach a hosted database.',
+      );
+    }
+    return null;
+  }
+  if (publishedPasswords.includes(chosen)) {
+    throw new Error('seed: SEED_OWNER_PASSWORD is a password published in the repo. Pick another.');
+  }
+  if (chosen.length < 16 || chosen !== chosen.trim()) {
+    throw new Error(
+      'seed: SEED_OWNER_PASSWORD must be at least 16 characters, without surrounding spaces.',
+    );
+  }
+  return chosen;
+}

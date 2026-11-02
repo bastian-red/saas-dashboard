@@ -11,6 +11,8 @@ name: Demo reseed
 #   DEMO_DIRECT_DATABASE_URL  the owner role, direct (migrations, db-app-role)
 #   DEMO_SEED_API_KEY         the demo workspace's ingest key; the seed refuses
 #                             the published local key on any non-local host
+#   DEMO_SEED_OWNER_PASSWORD  the owners' password (sam, jo); the seed refuses
+#                             the published ones. The viewer keeps its own.
 
 on:
   schedule:
@@ -33,6 +35,7 @@ jobs:
       DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
       DIRECT_DATABASE_URL: ${{ secrets.DEMO_DIRECT_DATABASE_URL }}
       SEED_API_KEY: ${{ secrets.DEMO_SEED_API_KEY }}
+      SEED_OWNER_PASSWORD: ${{ secrets.DEMO_SEED_OWNER_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -43,10 +46,10 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Refuse to run without the three secrets
+      - name: Refuse to run without the four secrets
         shell: bash
         run: |
-          for name in DATABASE_URL DIRECT_DATABASE_URL SEED_API_KEY; do
+          for name in DATABASE_URL DIRECT_DATABASE_URL SEED_API_KEY SEED_OWNER_PASSWORD; do
             [[ -n "${!name}" ]] || { echo "::error::secret for ${name} is not set"; exit 1; }
           done
       - run: pnpm db:generate
