@@ -266,8 +266,8 @@ and builds all four Docker images.
 
 The same code, configured for free tiers. Nothing in it is demo-only except the three settings
 named below, and each one is off by default.
-Every push to `main` redeploys the web app through Vercel's GitHub app. The three Render
-services are set to deploy on commit, which takes Render's GitHub app on this repo.
+Every push to `main` redeploys all four pieces: the web app through Vercel's GitHub app, the
+three services through Render's.
 
 | Piece                                                | Where                                                                          | Notes                                                                                      |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
