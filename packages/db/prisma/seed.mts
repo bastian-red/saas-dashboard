@@ -37,6 +37,8 @@ import { BatchWriter, hashKey, userHash, type Row } from '@saas/ingest';
 import { laneSpecSchema, type LaneSpec } from '@saas/shared';
 import { hashPassword } from '@saas/shared/server';
 
+import { seedApiKey, type SeedKey } from '../src/seed-key.js';
+
 const DEMO_EMAIL = 'sam@fieldnote.test';
 const DEMO_PASSWORD = 'demo-password-2026';
 const DEMO_NAME = 'Sam Okafor';
@@ -393,7 +395,11 @@ async function teardown(client: pg.PoolClient): Promise<void> {
   ]);
 }
 
-async function createWorkspace(client: pg.PoolClient, ws: SeedWorkspace): Promise<void> {
+async function createWorkspace(
+  client: pg.PoolClient,
+  ws: SeedWorkspace,
+  demoKey: SeedKey,
+): Promise<void> {
   let branding: string | null = null;
   if (ws.accent !== null) {
     const result = checkAccent(ws.accent);
@@ -431,14 +437,16 @@ async function createWorkspace(client: pg.PoolClient, ws: SeedWorkspace): Promis
       ]);
     }
     if (ws.apiKey !== null) {
+      // The published key is a placeholder for whichever key this database gets.
+      const key = ws.apiKey === DEMO_API_KEY ? demoKey : { key: ws.apiKey, name: 'Demo key' };
       await client.query(
         'INSERT INTO api_keys (id, tenant_id, name, prefix, key_hash) VALUES ($1, $2, $3, $4, $5)',
         [
           seedId('key', ws.slug.replace(/-/gu, '')),
           ws.id,
-          'Demo key (local only)',
-          ws.apiKey.slice(0, 12),
-          hashKey(ws.apiKey),
+          key.name,
+          key.key.slice(0, 12),
+          hashKey(key.key),
         ],
       );
     }
@@ -470,6 +478,11 @@ async function createWorkspace(client: pg.PoolClient, ws: SeedWorkspace): Promis
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   if (databaseUrl === undefined || databaseUrl === '') throw new Error('DATABASE_URL is not set');
+  // Decided before anything is deleted: a refusal must leave the database as it was.
+  const demoKey = seedApiKey(
+    { SEED_API_KEY: process.env.SEED_API_KEY, DATABASE_URL: databaseUrl },
+    DEMO_API_KEY,
+  );
 
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 3 });
   try {
@@ -492,7 +505,7 @@ async function main(): Promise<void> {
         `SELECT ensure_event_partitions($1::timestamptz - INTERVAL '${String(DAYS + 1)} days', $1::timestamptz + INTERVAL '2 months')`,
         [ANCHOR],
       );
-      for (const ws of WORKSPACES) await createWorkspace(client, ws);
+      for (const ws of WORKSPACES) await createWorkspace(client, ws, demoKey);
     } finally {
       client.release();
     }

@@ -1,0 +1,52 @@
+name: Demo reseed
+
+# The live demo's data, kept current. The seed anchors its 90 days of events to
+# the hour it runs (prisma/seed.mts says why), so a database seeded once shows
+# an empty "last 7 days" a week later. Every Monday this applies any pending
+# migration and reseeds the hosted database. The seed is idempotent and deletes
+# only its own two workspaces and three users.
+#
+# Secrets (repository settings, never in the repo):
+#   DEMO_DATABASE_URL         saas_app on the hosted Postgres (pooled is fine)
+#   DEMO_DIRECT_DATABASE_URL  the owner role, direct (migrations, db-app-role)
+#   DEMO_SEED_API_KEY         the demo workspace's ingest key; the seed refuses
+#                             the published local key on any non-local host
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: demo-reseed
+  cancel-in-progress: false
+
+jobs:
+  reseed:
+    # Forks have no secrets and no demo to refresh.
+    if: github.repository == 'bastian-red/saas-dashboard'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
+      DIRECT_DATABASE_URL: ${{ secrets.DEMO_DIRECT_DATABASE_URL }}
+      SEED_API_KEY: ${{ secrets.DEMO_SEED_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Refuse to run without the three secrets
+        shell: bash
+        run: |
+          for name in DATABASE_URL DIRECT_DATABASE_URL SEED_API_KEY; do
+            [[ -n "${!name}" ]] || { echo "::error::secret for ${name} is not set"; exit 1; }
+          done
+      - run: pnpm db:generate
+      - run: pnpm db:deploy
+      - run: pnpm db:seed
