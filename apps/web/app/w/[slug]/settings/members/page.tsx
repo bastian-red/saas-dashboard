@@ -2,6 +2,7 @@ import { can, canAssign, inviteSchema, memberSchema, PLANS, ROLES, type Role } f
 import { z } from 'zod';
 
 import { ActionForm, Submit } from '../../../../../components/action-form';
+import { LeaveWorkspace } from '../../../../../components/leave-workspace';
 import { apiFetch } from '../../../../../lib/api';
 import { formatDate } from '../../../../../lib/format';
 import { viewerTimeZone } from '../../../../../lib/viewer';
@@ -217,11 +218,11 @@ export default async function MembersPage({ params }: { params: Promise<{ slug: 
 
       <section className="section" aria-labelledby="leave-h">
         <h2 id="leave-h">Leave or delete</h2>
-        <ActionForm action={leaveWorkspaceAction} hidden={hidden} label="Leave workspace">
-          <Submit className="button" pendingText="Leaving">
-            Leave {workspace.name}
-          </Submit>
-        </ActionForm>
+        <LeaveWorkspace
+          action={leaveWorkspaceAction}
+          hidden={hidden}
+          workspaceName={workspace.name}
+        />
         {can(workspace.role, 'workspace.delete') ? (
           <ActionForm
             action={deleteWorkspaceAction}

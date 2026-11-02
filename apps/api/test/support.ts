@@ -15,7 +15,7 @@ import type { AddressInfo } from 'node:net';
 import { createPrismaClient, type PrismaClient } from '@saas/db';
 import type { SessionUser } from '@saas/shared';
 import pg from 'pg';
-import { mintServiceToken } from '@saas/shared/server';
+import { CLIENT_ADDRESS_HEADER, mintServiceToken, signClientAddress } from '@saas/shared/server';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { Redis } from 'ioredis';
@@ -181,9 +181,19 @@ export async function call<T = unknown>(
   harness: Harness,
   method: string,
   path: string,
-  options: { user?: SessionUser | null; body?: unknown; secret?: string; address?: string } = {},
+  options: {
+    user?: SessionUser | null;
+    body?: unknown;
+    secret?: string;
+    address?: string;
+    /** The browser address the web server vouches for, signed as it signs it. */
+    signedAddress?: string;
+  } = {},
 ): Promise<Reply<T>> {
   const headers: Record<string, string> = { 'x-forwarded-for': options.address ?? randomAddress() };
+  if (options.signedAddress !== undefined) {
+    headers[CLIENT_ADDRESS_HEADER] = signClientAddress(options.signedAddress, AUTH_SECRET);
+  }
   if (options.user !== null && options.user !== undefined) {
     headers.authorization = `Bearer ${mintServiceToken(options.user, options.secret ?? AUTH_SECRET)}`;
   }

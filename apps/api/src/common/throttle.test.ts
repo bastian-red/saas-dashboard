@@ -2,6 +2,8 @@ import { Controller, Get } from '@nestjs/common';
 import type { ExecutionContext } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 
+import { CLIENT_ADDRESS_HEADER, signClientAddress } from '@saas/shared/server';
+
 import type { ApiConfig } from '../config/config';
 import { Budget, budgetOf, throttlers, trackerFor } from './throttle';
 
@@ -26,7 +28,13 @@ function contextFor(handler: keyof Probe): ExecutionContext {
   } as unknown as ExecutionContext;
 }
 
-const CONFIG = { rateLimitGlobal: 240, rateLimitAuth: 5, rateLimitInvite: 20 } as ApiConfig;
+const SECRET = 'a-test-secret-of-sufficient-length';
+const CONFIG = {
+  rateLimitGlobal: 240,
+  rateLimitAuth: 5,
+  rateLimitInvite: 20,
+  authSecret: SECRET,
+} as ApiConfig;
 
 describe('throttlers', () => {
   const [general, auth, invite] = throttlers(CONFIG);
@@ -60,12 +68,48 @@ describe('throttlers', () => {
 });
 
 describe('trackerFor', () => {
-  it('counts signed-in calls per user, because they all arrive from the web server', () => {
-    const user = { id: 'cuser000000000000000001', email: 'a@b.co', name: 'A' };
-    expect(trackerFor({ user, ip: '10.0.0.5' })).toBe('user:cuser000000000000000001');
+  const NOW = 1_793_660_000;
+  const signed = (address: string, secret = SECRET) => ({
+    [CLIENT_ADDRESS_HEADER]: signClientAddress(address, secret, NOW),
   });
 
-  it('counts anonymous calls per address', () => {
-    expect(trackerFor({ user: undefined, ip: '203.0.113.9' })).toBe('ip:203.0.113.9');
+  it('keys a signed-in call by its user (they all arrive from the web server), whatever the address', () => {
+    const user = { id: 'u1', email: 'a@b.test', name: 'A' };
+    expect(trackerFor({ user, ip: '10.0.0.1', headers: signed('203.0.113.7') }, SECRET, NOW)).toBe(
+      'user:u1',
+    );
+  });
+
+  it('keys an anonymous call by the address the web server vouches for', () => {
+    expect(trackerFor({ ip: '10.0.0.1', headers: signed('203.0.113.7') }, SECRET, NOW)).toBe(
+      'ip:203.0.113.7',
+    );
+  });
+
+  it('falls back to the transport address for anything that does not verify', () => {
+    // A direct caller cannot sign: it is limited by where it really connects from.
+    const forged = { [CLIENT_ADDRESS_HEADER]: 'v1;203.0.113.7;1793660000;AAAA' };
+    expect(trackerFor({ ip: '10.0.0.1', headers: forged }, SECRET, NOW)).toBe('ip:10.0.0.1');
+    expect(
+      trackerFor(
+        { ip: '10.0.0.1', headers: signed('203.0.113.7', 'another-secret-entirely') },
+        SECRET,
+        NOW,
+      ),
+    ).toBe('ip:10.0.0.1');
+    expect(trackerFor({ ip: '10.0.0.1', headers: {} }, SECRET, NOW)).toBe('ip:10.0.0.1');
+    expect(trackerFor({ ip: undefined }, SECRET, NOW)).toBe('ip:unknown');
+  });
+
+  it('wires the shared secret into the throttlers', () => {
+    const [general] = throttlers(CONFIG);
+    const tracker = general!.getTracker!(
+      {
+        ip: '10.0.0.1',
+        headers: { [CLIENT_ADDRESS_HEADER]: signClientAddress('203.0.113.9', SECRET) },
+      },
+      contextFor('list'),
+    );
+    return expect(Promise.resolve(tracker)).resolves.toBe('ip:203.0.113.9');
   });
 });

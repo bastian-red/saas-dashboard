@@ -17,13 +17,17 @@
  * would make one busy author throttle everybody. They are keyed by the user id
  * in the verified token instead, which is why `SessionGuard` runs BEFORE the
  * throttler (`app.module.ts`). Anonymous calls (sign-in, sign-up) are keyed by
- * address: the web app forwards the browser's address in
- * `x-forwarded-for` and `trust proxy` is one hop. Counters are per budget, not
- * per route, so splitting a flood across two routes buys nothing.
+ * address: the browser's, when the web server vouches for it with a signed
+ * `x-saas-client-address` (`@saas/shared/server` client-address), else the
+ * transport address `req.ip`, which `TRUST_PROXY_HOPS` stops at the host's own
+ * edge. `x-forwarded-for` alone is never enough on a public host: anyone can
+ * write it. Counters are per budget, not per route, so splitting a flood across
+ * two routes buys nothing.
  */
 import { SetMetadata, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { ThrottlerOptions } from '@nestjs/throttler';
+import { CLIENT_ADDRESS_HEADER, verifyClientAddress } from '@saas/shared/server';
 import type { Request } from 'express';
 
 import type { ApiConfig } from '../config/config';
@@ -47,9 +51,17 @@ export function budgetOf(context: ExecutionContext): BudgetName | undefined {
   ]);
 }
 
-export function trackerFor(request: Pick<RequestWithUser, 'user' | 'ip'>): string {
+export function trackerFor(
+  request: Pick<RequestWithUser, 'user' | 'ip'> & {
+    headers?: Record<string, string | string[] | undefined>;
+  },
+  secret: string,
+  nowSeconds?: number,
+): string {
   if (request.user !== undefined) return `user:${request.user.id}`;
-  return `ip:${request.ip ?? 'unknown'}`;
+  const raw = request.headers?.[CLIENT_ADDRESS_HEADER];
+  const vouched = verifyClientAddress(typeof raw === 'string' ? raw : null, secret, nowSeconds);
+  return `ip:${vouched ?? request.ip ?? 'unknown'}`;
 }
 
 const MINUTE = 60_000;
@@ -58,7 +70,7 @@ export function throttlers(config: ApiConfig): ThrottlerOptions[] {
   const common = {
     ttl: MINUTE,
     getTracker: (request: Record<string, unknown>) =>
-      trackerFor(request as unknown as Request & RequestWithUser),
+      trackerFor(request as unknown as Request & RequestWithUser, config.authSecret),
     generateKey: (_context: ExecutionContext, tracker: string, name: string) =>
       `throttle:${name}:${tracker}`,
   };

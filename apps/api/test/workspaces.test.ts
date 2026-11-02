@@ -81,6 +81,35 @@ describe('sign up and the auth budget', () => {
   });
 });
 
+describe('the address an anonymous budget is keyed on', () => {
+  const signIn = (opts: { address: string; signedAddress?: string }) =>
+    call(harness, 'POST', '/auth/sign-in', {
+      user: null,
+      ...opts,
+      body: { email: 'nobody@saas.test', password: 'wrong-password-123' },
+    });
+
+  it('is the signed browser address when the web server vouches for one, over x-forwarded-for', async () => {
+    // One x-forwarded-for, six vouched-for browsers: six separate budgets. Without
+    // the signature this is one caller, refused on its sixth try.
+    const shared = randomAddress();
+    const distinct = [];
+    for (let i = 0; i < 6; i += 1) {
+      distinct.push((await signIn({ address: shared, signedAddress: randomAddress() })).status);
+    }
+    expect(distinct).toEqual([400, 400, 400, 400, 400, 400]);
+
+    // And the reverse: one vouched-for browser behind six forwarded addresses is
+    // still one browser.
+    const browser = randomAddress();
+    const same = [];
+    for (let i = 0; i < 6; i += 1) {
+      same.push((await signIn({ address: randomAddress(), signedAddress: browser })).status);
+    }
+    expect(same).toEqual([400, 400, 400, 400, 400, 429]);
+  });
+});
+
 describe('workspaces', () => {
   it('creates one with its creator as owner, and refuses a taken address', async () => {
     const w = await ws(owner, 'acme');

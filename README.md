@@ -285,12 +285,15 @@ What a public deployment changes, and the mechanism that holds each:
 - **The shared login cannot be stranded.** `DEMO_PINNED_USERS=rui@fieldnote.test` on the API
   refuses `DELETE /workspaces/:slug/membership` for that account with a sentence saying why, so
   one visitor cannot leave the next with an empty account (`apps/api/test/demo-pin.test.ts`).
-- **Every visitor has their own sign-in budget.** Render's edge appends two `x-forwarded-for`
-  entries after the caller, so the browser address the web server forwards is four from the right:
-  `TRUST_PROXY_HOPS=4`. Measured on the live API, not assumed: at 3, distinct forged addresses
-  all drew on one budget (the caller's); at 4, a repeated address is refused on its sixth try and
-  distinct ones are not. The cost: a caller who reaches the API directly can choose its own
-  anonymous address.
+- **Every visitor has their own sign-in budget, and nobody picks theirs.** The web server signs
+  the browser address it forwards (HMAC with `AUTH_SECRET`, a minute either side,
+  `packages/shared/src/server/client-address.ts`); the API limits an anonymous call by that
+  address when it verifies and by `req.ip` otherwise. `TRUST_PROXY_HOPS=3` stops `req.ip` at
+  Render's own edge, measured on the live API with forged `x-forwarded-for` probes: at 1 or 2 the
+  counter keyed on rotating proxy addresses and never filled, at 4 a direct caller chose its own
+  address, at 3 it is the address that really connected. So a caller that skips the web server is
+  limited where it stands (`apps/api/test/workspaces.test.ts`, "the address an anonymous budget is
+  keyed on").
 - **The data stays current.** The seed anchors 90 days of events to the hour it runs, so
   `.github/workflows/demo-reseed.yml` applies migrations and reseeds every Monday (about 18
   minutes on Neon free, most of it the aggregator's own rollup code).

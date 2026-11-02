@@ -65,17 +65,17 @@ export interface ApiConfig {
   rateLimitAuth: number;
   rateLimitInvite: number;
   /**
-   * Proxies in front of this API whose `x-forwarded-for` entries are trusted.
-   * Locally the web server is the only hop (1). On a host whose own proxy
-   * appends the web server's address, the browser's address sits one entry
-   * further left, so the count is that host's hops plus one; trusting fewer
-   * makes every visitor share the web server's anonymous budgets, trusting more
-   * lets a caller pick its own address.
+   * Proxies in front of this API whose `x-forwarded-for` entries are trusted,
+   * which decides `req.ip`: the address an anonymous call is limited by when
+   * the web server has not vouched for a browser address (`common/throttle.ts`).
+   * Set it to the host's OWN proxies, so `req.ip` is the address the host saw
+   * connect. Locally the web server is the only hop (1). Trusting more lets a
+   * direct caller pick its own address by writing the header.
    *
-   * Measured on Render (2026-11-02): its edge appends two entries after the
-   * caller's, so the web server's forwarded browser address is 4 from the right.
-   * At 3 every visitor behind one web server instance shared a budget; at 4 a
-   * repeated address is cut off after RATE_LIMIT_AUTH and distinct ones are not.
+   * Measured on Render (2026-11-02) with forged-header sign-in probes: its edge
+   * appends two entries after the caller's, so 3 lands on the real caller. At
+   * 1 or 2 the counter keyed on rotating proxy addresses and never filled; at 4
+   * a direct caller chose its own address.
    */
   trustProxyHops: number;
   /**

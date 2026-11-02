@@ -21,13 +21,17 @@ import 'server-only';
  * whatever it is handed, so an API that drifted would produce a blank region
  * rather than an error, and the failure would be blamed on CSS.
  *
- * **Anonymous calls carry the browser's address.** The API rate-limits sign-in
- * and sign-up per address, and every request it sees comes from this server;
- * without `x-forwarded-for` everybody in the world would share one budget.
- * Signed-in calls are limited per user and need nothing extra.
+ * **Anonymous calls carry the browser's address, signed.** The API rate-limits
+ * sign-in and sign-up per address, and every request it sees comes from this
+ * server; without the address everybody in the world would share one budget.
+ * It travels twice: `x-forwarded-for` for a proxy-hop count that trusts it
+ * (local development), and `x-saas-client-address`, HMAC-signed with
+ * AUTH_SECRET, which is the one the API believes on a public host, where anyone
+ * can write `x-forwarded-for`. Signed-in calls are limited per user and need
+ * nothing extra.
  */
 import type { SessionUser } from '@saas/shared';
-import { mintServiceToken } from '@saas/shared/server';
+import { CLIENT_ADDRESS_HEADER, mintServiceToken, signClientAddress } from '@saas/shared/server';
 import type { z } from 'zod';
 
 import { headers } from 'next/headers';
@@ -69,6 +73,22 @@ async function clientAddress(): Promise<string | null> {
   }
 }
 
+/**
+ * The headers that carry `address`. The signed one is skipped for a value that
+ * is not an IP (a misconfigured proxy), which then counts as no address at all
+ * on a public host rather than failing the request.
+ */
+function forwardedAddress(address: string): Record<string, string> {
+  try {
+    return {
+      'x-forwarded-for': address,
+      [CLIENT_ADDRESS_HEADER]: signClientAddress(address, authSecret()),
+    };
+  } catch {
+    return { 'x-forwarded-for': address };
+  }
+}
+
 async function call<T>(
   baseUrl: string,
   user: SessionUser | null,
@@ -83,7 +103,7 @@ async function call<T>(
       // `null` for the public routes (auth, status): there is no session,
       // so there is nobody to mint a token for, and the address is forwarded.
       ...(user === null ? {} : { authorization: `Bearer ${mintServiceToken(user, authSecret())}` }),
-      ...(address === null ? {} : { 'x-forwarded-for': address }),
+      ...(address === null ? {} : forwardedAddress(address)),
       ...(options.body === undefined ? {} : { 'content-type': 'application/json' }),
     },
     ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
