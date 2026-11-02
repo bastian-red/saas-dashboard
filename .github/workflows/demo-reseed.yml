@@ -26,7 +26,9 @@ jobs:
     # Forks have no secrets and no demo to refresh.
     if: github.repository == 'bastian-red/saas-dashboard'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # Measured 2026-11-02: migrate 6 s, seed 18 min on Neon free (autoscaling
+    # 0.25-2 CU), almost all of it the server folding 82k events into rollups.
+    timeout-minutes: 45
     env:
       DATABASE_URL: ${{ secrets.DEMO_DATABASE_URL }}
       DIRECT_DATABASE_URL: ${{ secrets.DEMO_DIRECT_DATABASE_URL }}
