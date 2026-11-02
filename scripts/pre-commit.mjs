@@ -47,6 +47,14 @@ const steps = [
     required: true,
   },
   {
+    // Pure URL rewrite only; no database. It once dropped `sslmode`, which no
+    // local lane can see because the local container does not require TLS.
+    name: 'db-app-role URL self-test',
+    cmd: 'node',
+    args: ['scripts/db-app-role.mjs', '--self-test'],
+    required: true,
+  },
+  {
     name: 'invisible characters (self-test)',
     cmd: 'node',
     args: ['scripts/invisible-chars.mjs', '--self-test'],

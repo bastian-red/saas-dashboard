@@ -22,6 +22,7 @@
     "db:drift": "./scripts/db-drift.sh",
     "env:contract": "node scripts/env-contract.mjs",
     "env:contract:self-test": "node scripts/env-contract.mjs --self-test",
+    "db:app-role:self-test": "node scripts/db-app-role.mjs --self-test",
     "scan:invisible": "node scripts/invisible-chars.mjs",
     "scan:invisible:self-test": "node scripts/invisible-chars.mjs --self-test",
     "scan:secrets": "gitleaks detect --no-banner --redact --config .gitleaks.toml",

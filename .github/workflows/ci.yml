@@ -44,6 +44,7 @@ jobs:
       # Self-tests first: a checker that has silently stopped checking passes
       # everything, and only a check on the checker can see that.
       - run: pnpm env:contract:self-test
+      - run: pnpm db:app-role:self-test
       - run: pnpm env:contract
       - run: pnpm scan:invisible:self-test
       - run: pnpm scan:invisible
